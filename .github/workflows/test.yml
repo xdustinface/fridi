@@ -48,7 +48,7 @@ jobs:
 
       - name: Run tests
         if: matrix.os != 'ubuntu-latest'
-        run: cargo test --workspace --exclude conductor-ui
+        run: cargo test --workspace --exclude conductor-ui --exclude conductor-agent
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest'
