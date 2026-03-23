@@ -1,5 +1,5 @@
 [package]
-name = "conductor-core"
+name = "fridi-core"
 version.workspace = true
 edition.workspace = true
 

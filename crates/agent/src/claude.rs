@@ -74,7 +74,7 @@ impl Agent for ClaudeAgent {
 
         if !config.context.is_empty() {
             if let Ok(ctx_json) = serde_json::to_string(&config.context) {
-                cmd.env("CONDUCTOR_CONTEXT", &ctx_json);
+                cmd.env("FRIDI_CONTEXT", &ctx_json);
             }
         }
 

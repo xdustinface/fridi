@@ -11,7 +11,7 @@ pub(crate) fn Sidebar(
     rsx! {
         div { class: "sidebar",
             div { class: "sidebar-header",
-                h1 { "conductor" }
+                h1 { "fridi" }
                 p { "AI Workflow Orchestrator" }
             }
             div { class: "workflow-list",
