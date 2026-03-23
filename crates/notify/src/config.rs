@@ -92,26 +92,25 @@ mod tests {
 
     #[test]
     fn test_config_from_env() {
-        // Use unique env var names to avoid interference from parallel tests
-        env::set_var("CONDUCTOR_SLACK_WEBHOOK_URL", "https://hooks.slack.com/test");
-        env::set_var("CONDUCTOR_SLACK_CHANNEL", "#alerts");
-        env::set_var("CONDUCTOR_TELEGRAM_BOT_TOKEN", "123:ABC");
-        env::set_var("CONDUCTOR_TELEGRAM_CHAT_ID", "-100123");
+        temp_env::with_vars(
+            [
+                ("CONDUCTOR_SLACK_WEBHOOK_URL", Some("https://hooks.slack.com/test")),
+                ("CONDUCTOR_SLACK_CHANNEL", Some("#alerts")),
+                ("CONDUCTOR_TELEGRAM_BOT_TOKEN", Some("123:ABC")),
+                ("CONDUCTOR_TELEGRAM_CHAT_ID", Some("-100123")),
+            ],
+            || {
+                let config = NotifyConfig::from_env();
 
-        let config = NotifyConfig::from_env();
+                let slack = config.slack.unwrap();
+                assert_eq!(slack.webhook_url, "https://hooks.slack.com/test");
+                assert_eq!(slack.channel.as_deref(), Some("#alerts"));
 
-        let slack = config.slack.unwrap();
-        assert_eq!(slack.webhook_url, "https://hooks.slack.com/test");
-        assert_eq!(slack.channel.as_deref(), Some("#alerts"));
-
-        let telegram = config.telegram.unwrap();
-        assert_eq!(telegram.bot_token, "123:ABC");
-        assert_eq!(telegram.chat_id, "-100123");
-
-        env::remove_var("CONDUCTOR_SLACK_WEBHOOK_URL");
-        env::remove_var("CONDUCTOR_SLACK_CHANNEL");
-        env::remove_var("CONDUCTOR_TELEGRAM_BOT_TOKEN");
-        env::remove_var("CONDUCTOR_TELEGRAM_CHAT_ID");
+                let telegram = config.telegram.unwrap();
+                assert_eq!(telegram.bot_token, "123:ABC");
+                assert_eq!(telegram.chat_id, "-100123");
+            },
+        );
     }
 
     #[test]
