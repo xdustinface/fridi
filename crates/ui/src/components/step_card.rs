@@ -20,7 +20,8 @@ pub(crate) fn StepCard(step: Step, status: Option<StepStatus>) -> Element {
     let skill_display = step.skill.as_deref().unwrap_or("-");
 
     rsx! {
-        div { class: "{card_class}",
+        div {
+            class: "{card_class}",
             div { class: "step-card-header",
                 div { class: "status-dot {status_class}" }
                 span { class: "step-name", "{step.name}" }
@@ -39,11 +40,6 @@ pub(crate) fn StepCard(step: Step, status: Option<StepStatus>) -> Element {
             if !step.depends_on.is_empty() {
                 div { class: "step-deps",
                     "depends on: {step.depends_on.join(\", \")}"
-                }
-            }
-            if matches!(status, StepStatus::Completed) {
-                div { class: "step-hint",
-                    "click to view terminal (coming soon)"
                 }
             }
         }

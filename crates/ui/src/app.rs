@@ -1,65 +1,129 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
-use fridi_core::engine::StepStatus;
+use fridi_core::session::{Session, SessionId, SessionStore};
 
-use crate::components::sidebar::Sidebar;
+use crate::components::tab_bar::TabBar;
+use crate::components::workflow_picker::WorkflowPicker;
 use crate::components::workflow_view::WorkflowView;
-use crate::state::{self, RunState, WorkflowState};
+use crate::state::{self, TabInfo};
 use crate::styles;
+
+const SESSIONS_DIR: &str = ".fridi/sessions";
 
 #[component]
 pub(crate) fn App() -> Element {
     let workflows_dir = PathBuf::from("./workflows");
-    let mut workflows = use_signal(|| state::load_workflows(&workflows_dir));
-    let mut selected = use_signal(|| Option::<usize>::None);
+    let workflows = use_signal(|| state::load_workflows(&workflows_dir));
 
-    let on_select = move |idx: usize| {
-        selected.set(Some(idx));
+    let store = use_signal(|| SessionStore::new(SESSIONS_DIR));
+
+    let mut tabs = use_signal(|| {
+        let summaries = state::load_sessions(&store.read());
+        summaries.iter().map(TabInfo::from).collect::<Vec<_>>()
+    });
+
+    let mut active_tab = use_signal(|| {
+        let t = tabs.read();
+        if t.is_empty() { None } else { Some(0) }
+    });
+
+    let mut showing_picker = use_signal(|| false);
+
+    // Load the full session for the active tab
+    let active_session: Option<Session> = {
+        let tabs_read = tabs.read();
+        let active = *active_tab.read();
+        active.and_then(|idx| {
+            tabs_read
+                .get(idx)
+                .and_then(|tab| store.read().load(&tab.session_id).ok())
+        })
     };
 
-    let on_run = move |()| {
-        if let Some(idx) = *selected.read() {
-            let mut wfs = workflows.write();
-            if let Some(ws) = wfs.get_mut(idx) {
-                let step_statuses: HashMap<String, StepStatus> = ws
-                    .workflow
-                    .steps
-                    .iter()
-                    .map(|s| (s.name.clone(), StepStatus::Pending))
-                    .collect();
-                ws.run_state = RunState::Running {
-                    step_statuses,
-                    started_at: std::time::Instant::now(),
-                };
+    let on_select_tab = move |idx: usize| {
+        active_tab.set(Some(idx));
+    };
+
+    let on_close_tab = move |idx: usize| {
+        let mut t = tabs.write();
+        if idx < t.len() {
+            t.remove(idx);
+            let len = t.len();
+            drop(t);
+            if len == 0 {
+                active_tab.set(None);
+            } else {
+                let current = active_tab.read().unwrap_or(0);
+                if current >= len {
+                    active_tab.set(Some(len - 1));
+                } else if current > idx {
+                    active_tab.set(Some(current - 1));
+                }
             }
         }
     };
 
-    let selected_ws: Option<WorkflowState> = {
-        let wfs = workflows.read();
-        (*selected.read()).and_then(|idx| wfs.get(idx).cloned())
+    let on_new_tab = move |()| {
+        showing_picker.set(true);
+    };
+
+    let on_pick_workflow = move |(wf, path): (fridi_core::schema::Workflow, PathBuf)| {
+        let session_id = SessionId::new(&wf.name);
+        let repo = wf.config.repo.clone();
+        let session = Session::new(
+            session_id.clone(),
+            wf.name.clone(),
+            path.to_string_lossy().into_owned(),
+            repo,
+        );
+
+        if let Err(e) = store.read().save(&session) {
+            eprintln!("failed to save session: {e}");
+            return;
+        }
+
+        let tab = TabInfo {
+            session_id,
+            workflow_name: wf.name.clone(),
+            status: session.status.clone(),
+        };
+        let mut t = tabs.write();
+        let new_idx = t.len();
+        t.push(tab);
+        drop(t);
+        active_tab.set(Some(new_idx));
+        showing_picker.set(false);
+    };
+
+    let on_cancel_picker = move |()| {
+        showing_picker.set(false);
     };
 
     rsx! {
         document::Style { {styles::APP_CSS} }
         div { class: "app-layout",
-            Sidebar {
-                workflows: workflows.read().clone(),
-                selected_index: *selected.read(),
-                on_select: on_select,
+            TabBar {
+                tabs: tabs.read().clone(),
+                active: *active_tab.read(),
+                on_select: on_select_tab,
+                on_close: on_close_tab,
+                on_new: on_new_tab,
             }
             div { class: "main-content",
-                if let Some(ws) = selected_ws {
-                    WorkflowView {
-                        workflow_state: ws,
-                        on_run: on_run,
-                    }
+                if let Some(session) = active_session {
+                    WorkflowView { session: session }
                 } else {
                     div { class: "empty-state",
-                        "Select a workflow to view details"
+                        "Click + to start a new workflow"
                     }
+                }
+            }
+            if *showing_picker.read() {
+                WorkflowPicker {
+                    workflows: workflows.read().clone(),
+                    on_select: on_pick_workflow,
+                    on_cancel: on_cancel_picker,
                 }
             }
         }
