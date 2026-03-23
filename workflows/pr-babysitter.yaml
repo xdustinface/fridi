@@ -1,10 +1,58 @@
 name: pr-babysitter
 description: Monitor PRs, fix issues, watch CI until green
 
+config:
+  repo: ""
+
 triggers:
+  - type: cron
+    schedule: "*/30 * * * *"
   - type: manual
+
+notifications:
+  slack:
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channel: "#dev-alerts"
+  telegram:
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${TELEGRAM_CHAT_ID}"
 
 steps:
   - name: check-prs
     agent: claude
     skill: recap
+    outputs:
+      - prs_needing_attention
+
+  - name: review
+    agent: claude
+    skill: code-review
+    depends_on: [check-prs]
+    condition: "steps.check-prs.outputs.prs_needing_attention > 0"
+    for_each: "steps.check-prs.outputs.prs"
+    on_failure: notify
+    outputs:
+      - review_findings
+
+  - name: fix
+    agent: claude
+    skill: fixup
+    depends_on: [review]
+    condition: "steps.review.outputs.review_findings.has_actionable"
+    for_each: "steps.review.outputs.prs_with_findings"
+
+  - name: watch-ci
+    agent: claude
+    skill: watch
+    depends_on: [fix]
+    for_each: "steps.fix.outputs.fixed_prs"
+    retry:
+      until: "output.ci_status == 'green'"
+      max_attempts: 10
+      interval: "5m"
+    on_failure: notify
+
+  - name: notify-complete
+    type: notification
+    depends_on: [watch-ci]
+    message: "All PRs processed: {{steps.watch-ci.summary}}"
