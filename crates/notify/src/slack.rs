@@ -77,3 +77,61 @@ impl Notifier for SlackNotifier {
 
     fn notifier_type(&self) -> &str { "slack" }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::*;
+
+    fn make_context() -> NotificationContext {
+        NotificationContext {
+            workflow_name: "deploy".to_string(),
+            step_name: "build".to_string(),
+            status: "completed".to_string(),
+            message: Some("Build succeeded".to_string()),
+            data: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_slack_send_success() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/webhook"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("ok"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let notifier = SlackNotifier::new(
+            format!("{}/webhook", server.uri()),
+            Some("#test".to_string()),
+        );
+        let ctx = make_context();
+        notifier.send(&ctx).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_slack_send_http_error() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/webhook"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("internal error"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let notifier = SlackNotifier::new(format!("{}/webhook", server.uri()), None);
+        let ctx = make_context();
+        let result = notifier.send(&ctx).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("500"), "expected 500 in error: {err}");
+    }
+}

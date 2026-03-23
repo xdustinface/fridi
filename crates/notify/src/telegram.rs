@@ -9,6 +9,7 @@ pub struct TelegramNotifier {
     bot_token: String,
     chat_id: String,
     client: Client,
+    base_url: String,
 }
 
 #[derive(Serialize)]
@@ -24,7 +25,14 @@ impl TelegramNotifier {
             bot_token,
             chat_id,
             client: Client::new(),
+            base_url: "https://api.telegram.org".to_string(),
         }
+    }
+
+    #[cfg(test)]
+    fn with_base_url(mut self, base_url: String) -> Self {
+        self.base_url = base_url;
+        self
     }
 
     fn format_message(&self, ctx: &NotificationContext) -> String {
@@ -54,7 +62,7 @@ impl TelegramNotifier {
 impl Notifier for TelegramNotifier {
     async fn send(&self, ctx: &NotificationContext) -> Result<(), NotifyError> {
         let text = self.format_message(ctx);
-        let url = format!("https://api.telegram.org/bot{}/sendMessage", self.bot_token);
+        let url = format!("{}/bot{}/sendMessage", self.base_url, self.bot_token);
 
         let request = SendMessageRequest {
             chat_id: &self.chat_id,
@@ -94,4 +102,68 @@ fn escape_markdown(text: &str) -> String {
         result.push(ch);
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use wiremock::matchers::{method, path_regex};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::*;
+
+    fn make_context() -> NotificationContext {
+        NotificationContext {
+            workflow_name: "deploy".to_string(),
+            step_name: "notify".to_string(),
+            status: "completed".to_string(),
+            message: Some("Deployed v1.0".to_string()),
+            data: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_telegram_send_success() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"/bot.+/sendMessage"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(r#"{"ok":true,"result":{}}"#),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let notifier = TelegramNotifier::new("123:ABC".to_string(), "-100".to_string())
+            .with_base_url(server.uri());
+
+        let ctx = make_context();
+        notifier.send(&ctx).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_telegram_send_http_error() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"/bot.+/sendMessage"))
+            .respond_with(
+                ResponseTemplate::new(403).set_body_string("bot was blocked"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let notifier = TelegramNotifier::new("123:ABC".to_string(), "-100".to_string())
+            .with_base_url(server.uri());
+
+        let ctx = make_context();
+        let result = notifier.send(&ctx).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("403"), "expected 403 in error: {err}");
+    }
 }
