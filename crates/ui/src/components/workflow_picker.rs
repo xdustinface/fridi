@@ -1,4 +1,4 @@
-use conductor_core::schema::Workflow;
+use fridi_core::schema::Workflow;
 use dioxus::prelude::*;
 
 #[component]

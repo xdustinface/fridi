@@ -1,4 +1,4 @@
-use conductor_core::session::SessionStatus;
+use fridi_core::session::SessionStatus;
 use dioxus::prelude::*;
 
 use crate::state::TabInfo;

@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
-use fridi_core::engine::StepStatus;
 use fridi_core::session::{Session, SessionId, SessionStore};
 
 use crate::components::tab_bar::TabBar;

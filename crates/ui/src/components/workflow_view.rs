@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use fridi_core::engine::StepStatus;
 use fridi_core::schema::Trigger;
 use fridi_core::session::Session;
 
