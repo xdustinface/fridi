@@ -203,7 +203,8 @@ impl SessionStore {
         fs::create_dir_all(&dir)?;
 
         let json = serde_json::to_string_pretty(session)?;
-        let tmp_path = dir.join("session.json.tmp");
+        let tmp_name = format!("session.json.{:016x}.tmp", rand::thread_rng().gen::<u64>());
+        let tmp_path = dir.join(tmp_name);
         fs::write(&tmp_path, &json)?;
         fs::rename(&tmp_path, self.session_file(&session.id))?;
         Ok(())
@@ -535,10 +536,16 @@ mod tests {
         let session = Session::new(id.clone(), "wf".into(), "wf.yaml".into(), None);
         store.save(&session).unwrap();
 
-        let tmp_file = tmp.path().join(id.as_str()).join("session.json.tmp");
-        assert!(!tmp_file.exists());
+        // No .tmp files should remain after a successful save
+        let session_dir = tmp.path().join(id.as_str());
+        let tmp_files: Vec<_> = fs::read_dir(&session_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(tmp_files.is_empty());
 
-        let session_file = tmp.path().join(id.as_str()).join("session.json");
+        let session_file = session_dir.join("session.json");
         assert!(session_file.exists());
     }
 
