@@ -120,8 +120,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
         trigger.fire();
-        let result =
-            tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await;
+        let result = tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await;
         // After stop, either the channel is closed (Ok(None)) or we time out --
         // but we should never receive an actual event.
         match result {

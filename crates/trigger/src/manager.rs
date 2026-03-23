@@ -47,9 +47,7 @@ impl TriggerManager {
 
     /// Takes the event receiver. Can only be called once, before `start`.
     /// The consumer uses this to receive trigger events.
-    pub fn subscribe(&mut self) -> Option<mpsc::Receiver<TriggerEvent>> {
-        self.event_rx.take()
-    }
+    pub fn subscribe(&mut self) -> Option<mpsc::Receiver<TriggerEvent>> { self.event_rx.take() }
 
     /// Starts all registered triggers. Each trigger's events are wrapped
     /// to include the configured overlap policy before being forwarded.
@@ -118,7 +116,11 @@ mod tests {
     async fn test_manager_manual_trigger() {
         let mut manager = TriggerManager::new(16);
         let trigger = Arc::new(ManualTrigger::new("wf1".to_string()));
-        manager.register("wf1".to_string(), vec![trigger.clone()], OverlapPolicy::Skip);
+        manager.register(
+            "wf1".to_string(),
+            vec![trigger.clone()],
+            OverlapPolicy::Skip,
+        );
 
         let mut rx = manager.subscribe().unwrap();
         manager.start().await.unwrap();
@@ -190,7 +192,11 @@ mod tests {
     async fn test_manager_stop() {
         let mut manager = TriggerManager::new(16);
         let trigger = Arc::new(ManualTrigger::new("wf1".to_string()));
-        manager.register("wf1".to_string(), vec![trigger.clone()], OverlapPolicy::Skip);
+        manager.register(
+            "wf1".to_string(),
+            vec![trigger.clone()],
+            OverlapPolicy::Skip,
+        );
 
         let mut rx = manager.subscribe().unwrap();
         manager.start().await.unwrap();
