@@ -117,7 +117,7 @@ mod tests {
         trigger.stop().await.unwrap();
 
         // Allow the spawned task to process the stop notification
-        tokio::task::yield_now().await;
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
         trigger.fire();
         let result =
