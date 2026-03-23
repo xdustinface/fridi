@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "fridi-mcp-server"
+path = "src/main.rs"
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
