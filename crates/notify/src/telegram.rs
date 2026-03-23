@@ -129,10 +129,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path_regex(r"/bot.+/sendMessage"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_string(r#"{"ok":true,"result":{}}"#),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"ok":true,"result":{}}"#))
             .expect(1)
             .mount(&server)
             .await;
@@ -150,9 +147,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path_regex(r"/bot.+/sendMessage"))
-            .respond_with(
-                ResponseTemplate::new(403).set_body_string("bot was blocked"),
-            )
+            .respond_with(ResponseTemplate::new(403).set_body_string("bot was blocked"))
             .expect(1)
             .mount(&server)
             .await;

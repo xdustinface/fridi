@@ -42,12 +42,12 @@ impl NotifyConfig {
     }
 
     pub fn from_env() -> Self {
-        let slack = env::var("CONDUCTOR_SLACK_WEBHOOK_URL").ok().map(|url| {
-            SlackConfig {
+        let slack = env::var("CONDUCTOR_SLACK_WEBHOOK_URL")
+            .ok()
+            .map(|url| SlackConfig {
                 webhook_url: url,
                 channel: env::var("CONDUCTOR_SLACK_CHANNEL").ok(),
-            }
-        });
+            });
 
         let telegram = env::var("CONDUCTOR_TELEGRAM_BOT_TOKEN")
             .ok()
@@ -64,9 +64,8 @@ impl NotifyConfig {
     }
 
     pub fn build_notifiers(&self) -> Vec<Box<dyn Notifier + Send + Sync>> {
-        let mut notifiers: Vec<Box<dyn Notifier + Send + Sync>> = vec![
-            Box::new(ConsoleNotifier::new()),
-        ];
+        let mut notifiers: Vec<Box<dyn Notifier + Send + Sync>> =
+            vec![Box::new(ConsoleNotifier::new())];
 
         if let Some(slack) = &self.slack {
             notifiers.push(Box::new(SlackNotifier::new(
@@ -94,7 +93,10 @@ mod tests {
     fn test_config_from_env() {
         temp_env::with_vars(
             [
-                ("CONDUCTOR_SLACK_WEBHOOK_URL", Some("https://hooks.slack.com/test")),
+                (
+                    "CONDUCTOR_SLACK_WEBHOOK_URL",
+                    Some("https://hooks.slack.com/test"),
+                ),
                 ("CONDUCTOR_SLACK_CHANNEL", Some("#alerts")),
                 ("CONDUCTOR_TELEGRAM_BOT_TOKEN", Some("123:ABC")),
                 ("CONDUCTOR_TELEGRAM_CHAT_ID", Some("-100123")),
