@@ -19,6 +19,11 @@ prompt: |
   - Report back to planner if the plan needs adjustment
 
 permissions: bypassPermissions
+allowed_tools:
+  - Bash
+  - Read
+  - Grep
+  - Glob
 spawnable_roles:
   - developer
   - qa

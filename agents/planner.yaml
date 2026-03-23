@@ -18,4 +18,9 @@ prompt: |
   - Suggested agent roles for each task
 
 permissions: bypassPermissions
+allowed_tools:
+  - Bash
+  - Read
+  - Grep
+  - Glob
 spawnable_roles: []
