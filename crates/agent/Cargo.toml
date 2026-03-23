@@ -10,3 +10,6 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
+portable-pty = { workspace = true }
+async-trait = { workspace = true }
+bytes = { workspace = true }
