@@ -50,13 +50,13 @@ impl NotifyConfig {
     }
 
     pub fn from_env() -> Self {
-        let slack = Self::non_empty_env("CONDUCTOR_SLACK_WEBHOOK_URL").map(|url| SlackConfig {
+        let slack = Self::non_empty_env("FRIDI_SLACK_WEBHOOK_URL").map(|url| SlackConfig {
             webhook_url: url,
-            channel: Self::non_empty_env("CONDUCTOR_SLACK_CHANNEL"),
+            channel: Self::non_empty_env("FRIDI_SLACK_CHANNEL"),
         });
 
-        let telegram = Self::non_empty_env("CONDUCTOR_TELEGRAM_BOT_TOKEN").and_then(|token| {
-            Self::non_empty_env("CONDUCTOR_TELEGRAM_CHAT_ID").map(|chat_id| TelegramConfig {
+        let telegram = Self::non_empty_env("FRIDI_TELEGRAM_BOT_TOKEN").and_then(|token| {
+            Self::non_empty_env("FRIDI_TELEGRAM_CHAT_ID").map(|chat_id| TelegramConfig {
                 bot_token: token,
                 chat_id,
             })
@@ -96,12 +96,12 @@ mod tests {
         temp_env::with_vars(
             [
                 (
-                    "CONDUCTOR_SLACK_WEBHOOK_URL",
+                    "FRIDI_SLACK_WEBHOOK_URL",
                     Some("https://hooks.slack.com/test"),
                 ),
-                ("CONDUCTOR_SLACK_CHANNEL", Some("#alerts")),
-                ("CONDUCTOR_TELEGRAM_BOT_TOKEN", Some("123:ABC")),
-                ("CONDUCTOR_TELEGRAM_CHAT_ID", Some("-100123")),
+                ("FRIDI_SLACK_CHANNEL", Some("#alerts")),
+                ("FRIDI_TELEGRAM_BOT_TOKEN", Some("123:ABC")),
+                ("FRIDI_TELEGRAM_CHAT_ID", Some("-100123")),
             ],
             || {
                 let config = NotifyConfig::from_env();
@@ -121,10 +121,10 @@ mod tests {
     fn test_config_from_env_ignores_empty_vars() {
         temp_env::with_vars(
             [
-                ("CONDUCTOR_SLACK_WEBHOOK_URL", Some("")),
-                ("CONDUCTOR_SLACK_CHANNEL", Some("  ")),
-                ("CONDUCTOR_TELEGRAM_BOT_TOKEN", Some("")),
-                ("CONDUCTOR_TELEGRAM_CHAT_ID", Some("-100123")),
+                ("FRIDI_SLACK_WEBHOOK_URL", Some("")),
+                ("FRIDI_SLACK_CHANNEL", Some("  ")),
+                ("FRIDI_TELEGRAM_BOT_TOKEN", Some("")),
+                ("FRIDI_TELEGRAM_CHAT_ID", Some("-100123")),
             ],
             || {
                 let config = NotifyConfig::from_env();

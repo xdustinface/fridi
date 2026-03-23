@@ -575,7 +575,7 @@ mod tests {
 
     #[test]
     fn test_store_list_nonexistent_dir() {
-        let store = SessionStore::new("/tmp/conductor-test-nonexistent-dir-xyz");
+        let store = SessionStore::new("/tmp/fridi-test-nonexistent-dir-xyz");
         let list = store.list().unwrap();
         assert!(list.is_empty());
     }

@@ -1,10 +1,10 @@
 [package]
-name = "conductor-agent"
+name = "fridi-agent"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-conductor-core = { workspace = true }
+fridi-core = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }

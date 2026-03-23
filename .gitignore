@@ -4,4 +4,4 @@
 .DS_Store
 config.toml
 sessions/
-conductor-state.json
+fridi-state.json

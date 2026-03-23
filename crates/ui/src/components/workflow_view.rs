@@ -1,6 +1,6 @@
-use conductor_core::engine::StepStatus;
-use conductor_core::schema::Trigger;
 use dioxus::prelude::*;
+use fridi_core::engine::StepStatus;
+use fridi_core::schema::Trigger;
 
 use crate::components::step_card::StepCard;
 use crate::state::{RunState, WorkflowState};

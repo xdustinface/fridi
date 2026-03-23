@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use conductor_core::engine::StepStatus;
 use dioxus::prelude::*;
+use fridi_core::engine::StepStatus;
 
 use crate::components::sidebar::Sidebar;
 use crate::components::workflow_view::WorkflowView;

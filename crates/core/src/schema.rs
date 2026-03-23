@@ -267,10 +267,10 @@ steps:
 
     #[test]
     fn test_env_interpolation() {
-        std::env::set_var("TEST_CONDUCTOR_VAR", "hello");
-        assert_eq!(interpolate_env("${TEST_CONDUCTOR_VAR}"), "hello");
+        std::env::set_var("TEST_FRIDI_VAR", "hello");
+        assert_eq!(interpolate_env("${TEST_FRIDI_VAR}"), "hello");
         assert_eq!(interpolate_env("no_vars"), "no_vars");
-        std::env::remove_var("TEST_CONDUCTOR_VAR");
+        std::env::remove_var("TEST_FRIDI_VAR");
     }
 
     #[test]

@@ -1,4 +1,4 @@
-# Pre-commit hooks for conductor
+# Pre-commit hooks for fridi
 repos:
   # ============================================================================
   # FAST CHECKS - Run on every commit.

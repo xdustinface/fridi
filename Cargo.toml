@@ -15,10 +15,10 @@ license = "MIT"
 
 [workspace.dependencies]
 # Internal crates
-conductor-core = { path = "crates/core" }
-conductor-agent = { path = "crates/agent" }
-conductor-notify = { path = "crates/notify" }
-conductor-trigger = { path = "crates/trigger" }
+fridi-core = { path = "crates/core" }
+fridi-agent = { path = "crates/agent" }
+fridi-notify = { path = "crates/notify" }
+fridi-trigger = { path = "crates/trigger" }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

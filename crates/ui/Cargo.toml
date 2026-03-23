@@ -1,13 +1,13 @@
 [package]
-name = "conductor-ui"
+name = "fridi-ui"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-conductor-core = { workspace = true }
-conductor-agent = { workspace = true }
-conductor-notify = { workspace = true }
-conductor-trigger = { workspace = true }
+fridi-core = { workspace = true }
+fridi-agent = { workspace = true }
+fridi-notify = { workspace = true }
+fridi-trigger = { workspace = true }
 dioxus = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

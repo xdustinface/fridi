@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use conductor_core::engine::StepStatus;
-use conductor_core::schema::Workflow;
+use fridi_core::engine::StepStatus;
+use fridi_core::schema::Workflow;
 
 /// Represents a loaded workflow and its current run state
 #[derive(Debug, Clone, PartialEq)]

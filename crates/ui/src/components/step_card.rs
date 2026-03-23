@@ -1,6 +1,6 @@
-use conductor_core::engine::StepStatus;
-use conductor_core::schema::Step;
 use dioxus::prelude::*;
+use fridi_core::engine::StepStatus;
+use fridi_core::schema::Step;
 
 #[component]
 pub(crate) fn StepCard(step: Step, status: Option<StepStatus>) -> Element {

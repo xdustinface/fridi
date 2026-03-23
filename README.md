@@ -1,16 +1,16 @@
 <div align="center">
 
-<img src="assets/logo.svg" width="80" height="80" alt="conductor logo">
+<img src="assets/logo.svg" width="80" height="80" alt="fridi logo">
 
-# conductor
+# fridi
 
-![Pre-commit](https://github.com/xdustinface/conductor/actions/workflows/pre-commit.yml/badge.svg) ![Tests](https://github.com/xdustinface/conductor/actions/workflows/test.yml/badge.svg) [![codecov](https://codecov.io/gh/xdustinface/conductor/graph/badge.svg)](https://codecov.io/gh/xdustinface/conductor) ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Pre-commit](https://github.com/xdustinface/fridi/actions/workflows/pre-commit.yml/badge.svg) ![Tests](https://github.com/xdustinface/fridi/actions/workflows/test.yml/badge.svg) [![codecov](https://codecov.io/gh/xdustinface/fridi/graph/badge.svg)](https://codecov.io/gh/xdustinface/fridi) ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 </div>
 
-## What is conductor?
+## What is fridi?
 
-Conductor is an AI workflow orchestrator built in Rust. It lets you define
+Fridi is an AI workflow orchestrator built in Rust. It lets you define
 workflows as YAML-based DAGs, spawn AI coding agents (starting with the Claude
 CLI), observe them through a live desktop UI, and receive notifications when
 things need attention.
@@ -35,7 +35,7 @@ things need attention.
 ## Architecture
 
 ```text
-conductor/
+fridi/
 +-- crates/
 |   +-- core/       # Workflow schema, YAML parsing, DAG, execution engine, sessions
 |   +-- agent/      # Agent trait, PTY spawning, Claude CLI implementation
@@ -57,8 +57,8 @@ conductor/
 ### Build
 
 ```sh
-git clone https://github.com/xdustinface/conductor.git
-cd conductor
+git clone https://github.com/xdustinface/fridi.git
+cd fridi
 cargo build --workspace
 ```
 
@@ -78,7 +78,7 @@ cargo test --workspace
 ### Run the UI
 
 ```sh
-cargo run -p conductor-ui
+cargo run -p fridi-ui
 ```
 
 ## Workflow Example

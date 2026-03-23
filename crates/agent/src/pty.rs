@@ -145,12 +145,12 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_spawn_echo() {
         let mut cmd = CommandBuilder::new("echo");
-        cmd.arg("hello conductor");
+        cmd.arg("hello fridi");
         let mut proc = PtyProcess::spawn(cmd).unwrap();
         let exit_code = proc.wait().await.unwrap();
         assert_eq!(exit_code, 0);
         let output = proc.collected_output().await;
-        assert!(output.contains("hello conductor"), "output was: {output}");
+        assert!(output.contains("hello fridi"), "output was: {output}");
     }
 
     #[tokio::test]
