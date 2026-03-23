@@ -1,5 +1,5 @@
-use fridi_core::schema::Workflow;
 use dioxus::prelude::*;
+use fridi_core::schema::Workflow;
 
 #[component]
 pub(crate) fn WorkflowPicker(
