@@ -5,7 +5,7 @@ use tokio::sync::{Mutex, mpsc};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info};
 
-use crate::traits::{Trigger, TriggerError, TriggerEvent};
+use crate::traits::{OverlapPolicy, Trigger, TriggerError, TriggerEvent};
 
 pub struct CronTrigger {
     schedule: String,
@@ -40,6 +40,7 @@ impl Trigger for CronTrigger {
                     workflow_name: name,
                     trigger_type: "cron".to_string(),
                     triggered_at: std::time::SystemTime::now(),
+                    overlap_policy: OverlapPolicy::default(),
                 };
                 if let Err(e) = tx.send(event).await {
                     error!("failed to send trigger event: {e}");
@@ -74,4 +75,27 @@ impl Trigger for CronTrigger {
     }
 
     fn trigger_type(&self) -> &str { "cron" }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cron_trigger_type() {
+        let trigger = CronTrigger::new("* * * * *".to_string(), "wf".to_string());
+        assert_eq!(trigger.trigger_type(), "cron");
+    }
+
+    #[tokio::test]
+    async fn test_cron_trigger_invalid_schedule() {
+        let trigger = CronTrigger::new("not a cron expr".to_string(), "wf".to_string());
+        let (tx, _rx) = mpsc::channel(10);
+        let result = trigger.start(tx).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TriggerError::InvalidCron(_) => {}
+            other => panic!("expected InvalidCron, got: {other}"),
+        }
+    }
 }

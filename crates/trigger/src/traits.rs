@@ -19,6 +19,7 @@ pub struct TriggerEvent {
     pub workflow_name: String,
     pub trigger_type: String,
     pub triggered_at: SystemTime,
+    pub overlap_policy: OverlapPolicy,
 }
 
 #[async_trait]
@@ -28,7 +29,7 @@ pub trait Trigger: Send + Sync {
     fn trigger_type(&self) -> &str;
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OverlapPolicy {
     #[default]
     Skip,
