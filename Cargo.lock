@@ -411,83 +411,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "conductor-agent"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "conductor-core",
- "portable-pty",
- "serde",
- "serde_json",
- "serde_yaml",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "conductor-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "petgraph",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "serde_yaml",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "conductor-notify"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "reqwest",
- "serde",
- "serde_json",
- "temp-env",
- "thiserror 2.0.18",
- "tokio",
- "toml",
- "tracing",
- "wiremock",
-]
-
-[[package]]
-name = "conductor-trigger"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "conductor-core",
- "serde",
- "thiserror 2.0.18",
- "tokio",
- "tokio-cron-scheduler",
- "tracing",
-]
-
-[[package]]
-name = "conductor-ui"
-version = "0.1.0"
-dependencies = [
- "conductor-agent",
- "conductor-core",
- "conductor-notify",
- "conductor-trigger",
- "dioxus",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "const-serialize"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1665,6 +1588,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "fridi-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "fridi-core",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fridi-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "petgraph",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fridi-mcp"
 version = "0.1.0"
 dependencies = [
@@ -1674,6 +1631,49 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "fridi-notify"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "temp-env",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml",
+ "tracing",
+ "wiremock",
+]
+
+[[package]]
+name = "fridi-trigger"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "fridi-core",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-cron-scheduler",
+ "tracing",
+]
+
+[[package]]
+name = "fridi-ui"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "fridi-agent",
+ "fridi-core",
+ "fridi-notify",
+ "fridi-trigger",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

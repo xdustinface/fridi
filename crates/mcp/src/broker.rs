@@ -27,7 +27,7 @@ impl MessageBroker {
     /// Create a new broker together with a spawn-request receiver.
     ///
     /// The returned `mpsc::Receiver<SpawnRequest>` should be consumed by the
-    /// conductor to handle dynamic agent spawning.
+    /// orchestrator to handle dynamic agent spawning.
     pub fn new() -> (Self, mpsc::Receiver<SpawnRequest>) {
         let (status_tx, _) = broadcast::channel(256);
         let (result_tx, _) = broadcast::channel(256);
@@ -137,7 +137,7 @@ impl MessageBroker {
         ok
     }
 
-    /// Forward a spawn request to the conductor.
+    /// Forward a spawn request to the orchestrator.
     pub async fn request_spawn(
         &self,
         role: String,

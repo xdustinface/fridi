@@ -29,7 +29,7 @@ pub struct AgentResult {
     pub timestamp: SystemTime,
 }
 
-/// Request to spawn a new agent, forwarded to the conductor
+/// Request to spawn a new agent, forwarded to the orchestrator
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpawnRequest {
     pub role: String,
