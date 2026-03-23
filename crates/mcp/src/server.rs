@@ -44,6 +44,8 @@ impl McpServer {
                     tools.push(name);
                 }
             }
+        } else {
+            tools.retain(|t| !COORDINATOR_TOOLS.contains(&t.as_str()));
         }
         self.broker
             .register_agent(id.clone(), role.to_string(), None);
@@ -186,6 +188,30 @@ mod tests {
             .handle_tool_call("coord", McpToolCall::ListAgents)
             .await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_non_coordinator_cannot_sneak_coordinator_tools() {
+        let (broker, _rx) = MessageBroker::new();
+        let mut server = McpServer::new(Arc::new(broker));
+        // Pass coordinator tool names explicitly for a non-coordinator role
+        server.register_agent("dev1".into(), "developer", all_tools());
+
+        let result = server
+            .handle_tool_call("dev1", McpToolCall::ListAgents)
+            .await;
+        assert!(matches!(result, Err(ServerError::PermissionDenied { .. })));
+
+        let result = server
+            .handle_tool_call(
+                "dev1",
+                McpToolCall::SpawnAgent {
+                    role: "tester".into(),
+                    input: json!({}),
+                },
+            )
+            .await;
+        assert!(matches!(result, Err(ServerError::PermissionDenied { .. })));
     }
 
     #[tokio::test]
