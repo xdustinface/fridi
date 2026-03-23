@@ -9,8 +9,7 @@ use crate::components::step_card::StepCard;
 pub(crate) fn WorkflowView(session: Session) -> Element {
     // Load the workflow from disk to get trigger/description metadata
     let workflow =
-        fridi_core::schema::Workflow::from_file(std::path::Path::new(&session.workflow_file))
-            .ok();
+        fridi_core::schema::Workflow::from_file(std::path::Path::new(&session.workflow_file)).ok();
 
     let (description, trigger_tags, steps) = match &workflow {
         Some(wf) => {
