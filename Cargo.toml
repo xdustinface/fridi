@@ -53,5 +53,14 @@ bytes = "1"
 
 # Scheduling
 tokio-cron-scheduler = "0.13"
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Random
+rand = "0.8"
+
+# Testing
+tempfile = "3"
+
 # Dioxus
 dioxus = { version = "0.7" }

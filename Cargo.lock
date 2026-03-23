@@ -329,6 +329,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link 0.2.1",
 ]
@@ -418,10 +419,13 @@ dependencies = [
 name = "conductor-core"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "petgraph",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "serde_yaml",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
