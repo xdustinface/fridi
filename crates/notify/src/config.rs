@@ -33,6 +33,14 @@ struct ConfigFile {
 }
 
 impl NotifyConfig {
+    /// Reads an env var, returning `None` for missing or empty/whitespace-only values.
+    fn non_empty_env(key: &str) -> Option<String> {
+        env::var(key)
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+    }
+
     pub fn from_file(path: &Path) -> Result<Self, NotifyError> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| NotifyError::ConfigError(format!("failed to read config: {e}")))?;
@@ -42,23 +50,17 @@ impl NotifyConfig {
     }
 
     pub fn from_env() -> Self {
-        let slack = env::var("CONDUCTOR_SLACK_WEBHOOK_URL")
-            .ok()
-            .map(|url| SlackConfig {
-                webhook_url: url,
-                channel: env::var("CONDUCTOR_SLACK_CHANNEL").ok(),
-            });
+        let slack = Self::non_empty_env("CONDUCTOR_SLACK_WEBHOOK_URL").map(|url| SlackConfig {
+            webhook_url: url,
+            channel: Self::non_empty_env("CONDUCTOR_SLACK_CHANNEL"),
+        });
 
-        let telegram = env::var("CONDUCTOR_TELEGRAM_BOT_TOKEN")
-            .ok()
-            .and_then(|token| {
-                env::var("CONDUCTOR_TELEGRAM_CHAT_ID")
-                    .ok()
-                    .map(|chat_id| TelegramConfig {
-                        bot_token: token,
-                        chat_id,
-                    })
-            });
+        let telegram = Self::non_empty_env("CONDUCTOR_TELEGRAM_BOT_TOKEN").and_then(|token| {
+            Self::non_empty_env("CONDUCTOR_TELEGRAM_CHAT_ID").map(|chat_id| TelegramConfig {
+                bot_token: token,
+                chat_id,
+            })
+        });
 
         Self { slack, telegram }
     }
@@ -111,6 +113,23 @@ mod tests {
                 let telegram = config.telegram.unwrap();
                 assert_eq!(telegram.bot_token, "123:ABC");
                 assert_eq!(telegram.chat_id, "-100123");
+            },
+        );
+    }
+
+    #[test]
+    fn test_config_from_env_ignores_empty_vars() {
+        temp_env::with_vars(
+            [
+                ("CONDUCTOR_SLACK_WEBHOOK_URL", Some("")),
+                ("CONDUCTOR_SLACK_CHANNEL", Some("  ")),
+                ("CONDUCTOR_TELEGRAM_BOT_TOKEN", Some("")),
+                ("CONDUCTOR_TELEGRAM_CHAT_ID", Some("-100123")),
+            ],
+            || {
+                let config = NotifyConfig::from_env();
+                assert!(config.slack.is_none());
+                assert!(config.telegram.is_none());
             },
         );
     }
