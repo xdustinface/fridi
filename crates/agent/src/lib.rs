@@ -4,7 +4,7 @@ pub mod pty;
 pub mod traits;
 
 pub use definition::{
-    load_agent_definition, load_agent_definitions, to_claude_agents_json, validate_definitions,
-    AgentDefinition, AgentDefinitionError, ClaudeAgentArgs, TemplateContext,
+    AgentDefinition, AgentDefinitionError, ClaudeAgentArgs, TemplateContext, load_agent_definition,
+    load_agent_definitions, to_claude_agents_json, validate_definitions,
 };
 pub use traits::{Agent, AgentConfig, AgentError, AgentHandle, AgentOutput};

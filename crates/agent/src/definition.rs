@@ -58,9 +58,7 @@ pub fn load_agent_definition(path: &Path) -> Result<AgentDefinition, AgentDefini
 }
 
 /// Load all agent definitions from a directory (`.yaml` and `.yml` files)
-pub fn load_agent_definitions(
-    dir: &Path,
-) -> Result<Vec<AgentDefinition>, AgentDefinitionError> {
+pub fn load_agent_definitions(dir: &Path) -> Result<Vec<AgentDefinition>, AgentDefinitionError> {
     let mut defs = Vec::new();
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
@@ -182,8 +180,9 @@ impl AgentDefinition {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_deserialize_full_definition() {
