@@ -133,6 +133,13 @@ impl PtyProcess {
         let collected = self.collected_output.lock().await;
         String::from_utf8_lossy(&collected).to_string()
     }
+
+    pub fn collected_output_sync(&self) -> String {
+        match self.collected_output.try_lock() {
+            Ok(collected) => String::from_utf8_lossy(&collected).to_string(),
+            Err(_) => String::new(),
+        }
+    }
 }
 
 #[cfg(test)]
