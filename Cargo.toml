@@ -50,5 +50,8 @@ async-trait = "0.1"
 
 # Bytes
 bytes = "1"
+
+# Scheduling
+tokio-cron-scheduler = "0.13"
 # Dioxus
 dioxus = { version = "0.7" }
