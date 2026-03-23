@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info};
 
@@ -73,7 +73,5 @@ impl Trigger for CronTrigger {
         Ok(())
     }
 
-    fn trigger_type(&self) -> &str {
-        "cron"
-    }
+    fn trigger_type(&self) -> &str { "cron" }
 }

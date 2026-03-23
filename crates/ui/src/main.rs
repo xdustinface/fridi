@@ -3,6 +3,4 @@ mod components;
 mod state;
 mod styles;
 
-fn main() {
-    dioxus::launch(app::App);
-}
+fn main() { dioxus::launch(app::App); }

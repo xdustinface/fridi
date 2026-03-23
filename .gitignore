@@ -3,3 +3,5 @@
 *.swo
 .DS_Store
 config.toml
+sessions/
+conductor-state.json
