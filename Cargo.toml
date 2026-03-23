@@ -42,5 +42,14 @@ petgraph = "0.7"
 # HTTP client (for notifications)
 reqwest = { version = "0.12", features = ["json"] }
 
+# PTY
+portable-pty = "0.9"
+
+# Traits
+async-trait = "0.1"
+
+# Bytes
+bytes = "1"
+
 # Dioxus
 dioxus = { version = "0.7" }
