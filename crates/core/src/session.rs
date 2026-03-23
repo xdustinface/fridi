@@ -19,7 +19,13 @@ impl SessionId {
         let hash: u16 = rand::thread_rng().gen();
         let safe_name: String = workflow_name
             .chars()
-            .map(|c| if c == '/' || c == '\\' || c == '.' || c == '\0' { '-' } else { c })
+            .map(|c| {
+                if c == '/' || c == '\\' || c == '.' || c == '\0' {
+                    '-'
+                } else {
+                    c
+                }
+            })
             .collect();
         Self(format!("{}-{}-{:04x}", safe_name, date, hash))
     }
