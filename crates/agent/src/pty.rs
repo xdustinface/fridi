@@ -1,9 +1,9 @@
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{Mutex, broadcast};
 use tracing::{debug, error};
 
 use crate::traits::{AgentError, AgentOutput};
@@ -89,9 +89,7 @@ impl PtyProcess {
         })
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> {
-        self.output_tx.subscribe()
-    }
+    pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> { self.output_tx.subscribe() }
 
     pub async fn write_stdin(&self, data: &[u8]) -> Result<(), AgentError> {
         let mut writer = self.writer.lock().await;
@@ -125,9 +123,7 @@ impl PtyProcess {
         Ok(())
     }
 
-    pub fn is_running(&self) -> bool {
-        self.running.load(Ordering::Relaxed)
-    }
+    pub fn is_running(&self) -> bool { self.running.load(Ordering::Relaxed) }
 
     pub async fn collected_output(&self) -> String {
         let collected = self.collected_output.lock().await;

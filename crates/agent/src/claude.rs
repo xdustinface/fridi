@@ -30,22 +30,16 @@ pub struct ClaudeAgent {
 }
 
 impl ClaudeAgent {
-    pub fn new(config: ClaudeAgentConfig) -> Self {
-        Self { config }
-    }
+    pub fn new(config: ClaudeAgentConfig) -> Self { Self { config } }
 }
 
 impl Default for ClaudeAgent {
-    fn default() -> Self {
-        Self::new(ClaudeAgentConfig::default())
-    }
+    fn default() -> Self { Self::new(ClaudeAgentConfig::default()) }
 }
 
 #[async_trait]
 impl Agent for ClaudeAgent {
-    fn agent_type(&self) -> &str {
-        "claude"
-    }
+    fn agent_type(&self) -> &str { "claude" }
 
     async fn spawn(&self, config: AgentConfig) -> Result<Box<dyn AgentHandle>, AgentError> {
         let mut cmd = CommandBuilder::new(&self.config.binary);
@@ -98,29 +92,19 @@ struct ClaudeAgentHandle {
 
 #[async_trait]
 impl AgentHandle for ClaudeAgentHandle {
-    fn subscribe(&self) -> broadcast::Receiver<AgentOutput> {
-        self.pty.subscribe()
-    }
+    fn subscribe(&self) -> broadcast::Receiver<AgentOutput> { self.pty.subscribe() }
 
     async fn write_stdin(&self, data: &[u8]) -> Result<(), AgentError> {
         self.pty.write_stdin(data).await
     }
 
-    async fn wait(&mut self) -> Result<i32, AgentError> {
-        self.pty.wait().await
-    }
+    async fn wait(&mut self) -> Result<i32, AgentError> { self.pty.wait().await }
 
-    async fn kill(&mut self) -> Result<(), AgentError> {
-        self.pty.kill().await
-    }
+    async fn kill(&mut self) -> Result<(), AgentError> { self.pty.kill().await }
 
-    fn is_running(&self) -> bool {
-        self.pty.is_running()
-    }
+    fn is_running(&self) -> bool { self.pty.is_running() }
 
-    fn collected_output(&self) -> String {
-        self.pty.collected_output_sync()
-    }
+    fn collected_output(&self) -> String { self.pty.collected_output_sync() }
 }
 
 #[cfg(test)]

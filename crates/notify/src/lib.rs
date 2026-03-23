@@ -6,4 +6,4 @@ pub mod traits;
 pub use console::ConsoleNotifier;
 pub use slack::SlackNotifier;
 pub use telegram::TelegramNotifier;
-pub use traits::{render_template, NotificationContext, Notifier, NotifyError};
+pub use traits::{NotificationContext, Notifier, NotifyError, render_template};

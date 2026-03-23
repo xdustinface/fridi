@@ -1,0 +1,9 @@
+max_width = 100
+edition = "2024"
+style_edition = "2024"
+fn_single_line = true
+imports_layout = "Mixed"
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+trailing_comma = "Vertical"

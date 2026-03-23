@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::sync::{mpsc, Mutex, Notify};
+use tokio::sync::{Mutex, Notify, mpsc};
 use tracing::debug;
 
 use crate::traits::{Trigger, TriggerError, TriggerEvent};
@@ -60,9 +60,7 @@ impl Trigger for ManualTrigger {
         Ok(())
     }
 
-    fn trigger_type(&self) -> &str {
-        "manual"
-    }
+    fn trigger_type(&self) -> &str { "manual" }
 }
 
 #[cfg(test)]
