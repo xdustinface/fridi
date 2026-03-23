@@ -1,0 +1,19 @@
+[package]
+name = "conductor-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+conductor-core = { workspace = true }
+conductor-agent = { workspace = true }
+conductor-notify = { workspace = true }
+conductor-trigger = { workspace = true }
+dioxus = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[features]
+default = ["desktop"]
+desktop = ["dioxus/desktop"]
+web = ["dioxus/web"]

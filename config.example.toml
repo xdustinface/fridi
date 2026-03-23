@@ -1,0 +1,10 @@
+[notifications.telegram]
+bot_token = ""
+chat_id = ""
+
+[notifications.slack]
+webhook_url = ""
+
+[agents.claude]
+binary = "claude"
+default_args = []

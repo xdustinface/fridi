@@ -1,0 +1,12 @@
+[package]
+name = "conductor-agent"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+conductor-core = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }

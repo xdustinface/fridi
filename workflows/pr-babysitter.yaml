@@ -1,0 +1,10 @@
+name: pr-babysitter
+description: Monitor PRs, fix issues, watch CI until green
+
+triggers:
+  - type: manual
+
+steps:
+  - name: check-prs
+    agent: claude
+    skill: recap

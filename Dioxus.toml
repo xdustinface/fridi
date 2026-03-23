@@ -1,0 +1,3 @@
+[application]
+name = "conductor-ui"
+default_platform = "desktop"
