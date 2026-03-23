@@ -17,7 +17,11 @@ impl SessionId {
         let now = Utc::now();
         let date = now.format("%Y%m%d");
         let hash: u16 = rand::thread_rng().gen();
-        Self(format!("{}-{}-{:04x}", workflow_name, date, hash))
+        let safe_name: String = workflow_name
+            .chars()
+            .map(|c| if c == '/' || c == '\\' || c == '.' || c == '\0' { '-' } else { c })
+            .collect();
+        Self(format!("{}-{}-{:04x}", safe_name, date, hash))
     }
 
     pub fn as_str(&self) -> &str { &self.0 }
@@ -561,5 +565,13 @@ mod tests {
         let store = SessionStore::new("/tmp/conductor-test-nonexistent-dir-xyz");
         let list = store.list().unwrap();
         assert!(list.is_empty());
+    }
+
+    #[test]
+    fn test_session_id_sanitizes_path_separators() {
+        let id = SessionId::new("../evil/path");
+        assert!(!id.as_str().contains('/'));
+        assert!(!id.as_str().contains('\\'));
+        assert!(!id.as_str().contains(".."));
     }
 }
