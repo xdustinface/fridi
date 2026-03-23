@@ -14,12 +14,7 @@ const SESSIONS_DIR: &str = ".fridi/sessions";
 #[component]
 pub(crate) fn App() -> Element {
     let workflows_dir = PathBuf::from("./workflows");
-    let workflows = use_signal(|| {
-        state::load_workflows(&workflows_dir)
-            .into_iter()
-            .map(|(wf, _path)| wf)
-            .collect::<Vec<_>>()
-    });
+    let workflows = use_signal(|| state::load_workflows(&workflows_dir));
 
     let store = use_signal(|| SessionStore::new(SESSIONS_DIR));
 
@@ -73,17 +68,20 @@ pub(crate) fn App() -> Element {
         showing_picker.set(true);
     };
 
-    let on_pick_workflow = move |wf: fridi_core::schema::Workflow| {
+    let on_pick_workflow = move |(wf, path): (fridi_core::schema::Workflow, PathBuf)| {
         let session_id = SessionId::new(&wf.name);
         let repo = wf.config.repo.clone();
         let session = Session::new(
             session_id.clone(),
             wf.name.clone(),
-            format!("./workflows/{}.yaml", wf.name),
+            path.to_string_lossy().into_owned(),
             repo,
         );
-        // Save the new session
-        let _ = store.read().save(&session);
+
+        if let Err(e) = store.read().save(&session) {
+            eprintln!("failed to save session: {e}");
+            return;
+        }
 
         let tab = TabInfo {
             session_id,

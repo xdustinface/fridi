@@ -21,7 +21,7 @@ impl From<&SessionSummary> for TabInfo {
     }
 }
 
-/// Load all workflow YAML files from a directory
+/// Load all workflow files from a directory, returning each workflow with its source path
 pub(crate) fn load_workflows(dir: &std::path::Path) -> Vec<(Workflow, PathBuf)> {
     let mut workflows = Vec::new();
     if let Ok(entries) = std::fs::read_dir(dir) {
@@ -42,5 +42,11 @@ pub(crate) fn load_workflows(dir: &std::path::Path) -> Vec<(Workflow, PathBuf)> 
 
 /// Load session summaries from the session store
 pub(crate) fn load_sessions(store: &SessionStore) -> Vec<SessionSummary> {
-    store.list().unwrap_or_default()
+    match store.list() {
+        Ok(summaries) => summaries,
+        Err(e) => {
+            eprintln!("failed to load sessions: {e}");
+            Vec::new()
+        }
+    }
 }

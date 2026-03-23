@@ -52,7 +52,8 @@ pub(crate) fn WorkflowView(session: Session) -> Element {
                     for step in &steps {
                         {
                             let status = session.steps.values()
-                                .find(|ss| ss.step_name == step.name)
+                                .filter(|ss| ss.step_name == step.name)
+                                .max_by_key(|ss| ss.attempt)
                                 .map(|ss| ss.status.clone());
                             rsx! {
                                 StepCard {

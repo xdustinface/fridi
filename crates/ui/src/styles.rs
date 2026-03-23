@@ -65,6 +65,14 @@ body {
     flex: 1;
 }
 
+.tab-session-id {
+    font-size: 10px;
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+}
+
 .tab-close {
     background: none;
     border: none;
@@ -111,7 +119,7 @@ body {
 }
 
 .status-dot.pending {
-    background-color: #555;
+    background-color: #f59e0b;
 }
 
 .status-dot.running {

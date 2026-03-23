@@ -30,6 +30,7 @@ pub(crate) fn TabBar(
                             onclick: move |_| on_select.call(idx),
                             div { class: "status-dot {status_class}" }
                             span { class: "tab-name", "{tab.workflow_name}" }
+                            span { class: "tab-session-id", "{tab.session_id}" }
                             button {
                                 class: "tab-close",
                                 onclick: move |evt| {
