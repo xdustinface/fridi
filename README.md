@@ -34,7 +34,7 @@ things need attention.
 
 ## Architecture
 
-```
+```text
 conductor/
 +-- crates/
 |   +-- core/       # Workflow schema, YAML parsing, DAG, execution engine, sessions
