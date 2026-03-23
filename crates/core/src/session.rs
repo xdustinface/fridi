@@ -122,6 +122,7 @@ impl Session {
     pub fn update_step(&mut self, step_id: StepSessionId, step: StepSession) {
         self.steps.insert(step_id, step);
         self.updated_at = Utc::now();
+        self.status = self.derive_status();
     }
 
     pub fn derive_status(&self) -> SessionStatus {
