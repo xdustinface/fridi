@@ -1,32 +1,28 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 
-use fridi_core::engine::StepStatus;
 use fridi_core::schema::Workflow;
+use fridi_core::session::{SessionId, SessionStatus, SessionStore, SessionSummary};
 
-/// Represents a loaded workflow and its current run state
+/// Information about a tab displayed in the tab bar
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct WorkflowState {
-    pub(crate) workflow: Workflow,
-    pub(crate) file_path: PathBuf,
-    pub(crate) run_state: RunState,
+pub(crate) struct TabInfo {
+    pub(crate) session_id: SessionId,
+    pub(crate) workflow_name: String,
+    pub(crate) status: SessionStatus,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, PartialEq)]
-pub(crate) enum RunState {
-    #[default]
-    Idle,
-    Running {
-        step_statuses: HashMap<String, StepStatus>,
-        started_at: std::time::Instant,
-    },
-    Completed,
-    Failed(String),
+impl From<&SessionSummary> for TabInfo {
+    fn from(summary: &SessionSummary) -> Self {
+        Self {
+            session_id: summary.id.clone(),
+            workflow_name: summary.workflow_name.clone(),
+            status: summary.status.clone(),
+        }
+    }
 }
 
 /// Load all workflow YAML files from a directory
-pub(crate) fn load_workflows(dir: &std::path::Path) -> Vec<WorkflowState> {
+pub(crate) fn load_workflows(dir: &std::path::Path) -> Vec<(Workflow, PathBuf)> {
     let mut workflows = Vec::new();
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -36,14 +32,15 @@ pub(crate) fn load_workflows(dir: &std::path::Path) -> Vec<WorkflowState> {
                 .is_some_and(|ext| ext == "yaml" || ext == "yml")
             {
                 if let Ok(wf) = Workflow::from_file(&path) {
-                    workflows.push(WorkflowState {
-                        workflow: wf,
-                        file_path: path,
-                        run_state: RunState::Idle,
-                    });
+                    workflows.push((wf, path));
                 }
             }
         }
     }
     workflows
+}
+
+/// Load session summaries from the session store
+pub(crate) fn load_sessions(store: &SessionStore) -> Vec<SessionSummary> {
+    store.list().unwrap_or_default()
 }

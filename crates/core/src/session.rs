@@ -75,7 +75,7 @@ pub enum SessionStatus {
     Interrupted,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StepSession {
     pub step_name: String,
     pub attempt: u32,
@@ -86,7 +86,7 @@ pub struct StepSession {
     pub finished_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     pub id: SessionId,
     pub workflow_name: String,
