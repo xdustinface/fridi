@@ -91,12 +91,7 @@ impl McpServer {
             McpToolCall::SpawnAgent { role, input } => {
                 let agent_id_new = Uuid::new_v4().to_string();
                 self.broker
-                    .request_spawn(
-                        agent_id_new.clone(),
-                        role,
-                        input,
-                        agent_id.to_string(),
-                    )
+                    .request_spawn(agent_id_new.clone(), role, input, agent_id.to_string())
                     .await
                     .map_err(|e| ServerError::Broker(e.to_string()))?;
                 Ok(McpToolResult::SpawnAgent {
