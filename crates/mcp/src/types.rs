@@ -32,6 +32,7 @@ pub struct AgentResult {
 /// Request to spawn a new agent, forwarded to the orchestrator
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpawnRequest {
+    pub agent_id: String,
     pub role: String,
     pub input: JsonValue,
     pub requested_by: String,

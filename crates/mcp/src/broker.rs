@@ -140,12 +140,14 @@ impl MessageBroker {
     /// Forward a spawn request to the orchestrator.
     pub async fn request_spawn(
         &self,
+        agent_id: String,
         role: String,
         input: serde_json::Value,
         requested_by: String,
     ) -> Result<(), mpsc::error::SendError<SpawnRequest>> {
         self.spawn_tx
             .send(SpawnRequest {
+                agent_id,
                 role,
                 input,
                 requested_by,
@@ -266,11 +268,17 @@ mod tests {
         broker.register_agent("coord".into(), "coordinator".into(), None);
 
         broker
-            .request_spawn("developer".into(), json!({"task": "code"}), "coord".into())
+            .request_spawn(
+                "new-agent-1".into(),
+                "developer".into(),
+                json!({"task": "code"}),
+                "coord".into(),
+            )
             .await
             .unwrap();
 
         let req = spawn_rx.recv().await.unwrap();
+        assert_eq!(req.agent_id, "new-agent-1");
         assert_eq!(req.role, "developer");
         assert_eq!(req.input, json!({"task": "code"}));
         assert_eq!(req.requested_by, "coord");
