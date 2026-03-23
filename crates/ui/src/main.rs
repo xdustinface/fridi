@@ -1,16 +1,8 @@
-use dioxus::prelude::*;
+mod app;
+mod components;
+mod state;
+mod styles;
 
 fn main() {
-    dioxus::launch(App);
-}
-
-#[component]
-fn App() -> Element {
-    rsx! {
-        div {
-            class: "app",
-            h1 { "conductor" }
-            p { "AI Workflow Orchestrator" }
-        }
-    }
+    dioxus::launch(app::App);
 }
