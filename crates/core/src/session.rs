@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-use std::fmt;
-use std::fs;
 use std::path::PathBuf;
+use std::{fmt, fs};
 
 use chrono::{DateTime, Utc};
 use rand::Rng;
@@ -21,30 +20,22 @@ impl SessionId {
         Self(format!("{}-{}-{:04x}", workflow_name, date, hash))
     }
 
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+    pub fn as_str(&self) -> &str { &self.0 }
 }
 
 impl fmt::Display for SessionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(&self.0) }
 }
 
 impl AsRef<str> for SessionId {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
+    fn as_ref(&self) -> &str { &self.0 }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StepSessionId(String);
 
 impl StepSessionId {
-    pub fn new(step_name: &str, attempt: u32) -> Self {
-        Self(format!("{}-{}", step_name, attempt))
-    }
+    pub fn new(step_name: &str, attempt: u32) -> Self { Self(format!("{}-{}", step_name, attempt)) }
 
     pub fn step_name(&self) -> &str {
         match self.0.rfind('-') {
@@ -62,9 +53,7 @@ impl StepSessionId {
 }
 
 impl fmt::Display for StepSessionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(&self.0) }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -201,13 +190,9 @@ impl SessionStore {
         }
     }
 
-    fn session_dir(&self, id: &SessionId) -> PathBuf {
-        self.base_dir.join(id.as_str())
-    }
+    fn session_dir(&self, id: &SessionId) -> PathBuf { self.base_dir.join(id.as_str()) }
 
-    fn session_file(&self, id: &SessionId) -> PathBuf {
-        self.session_dir(id).join("session.json")
-    }
+    fn session_file(&self, id: &SessionId) -> PathBuf { self.session_dir(id).join("session.json") }
 
     pub fn save(&self, session: &Session) -> Result<(), SessionStoreError> {
         let dir = self.session_dir(&session.id);
@@ -264,8 +249,9 @@ impl SessionStore {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_session_id_format() {
@@ -323,12 +309,7 @@ mod tests {
 
     #[test]
     fn test_session_update_step() {
-        let mut session = Session::new(
-            SessionId::new("wf"),
-            "wf".into(),
-            "wf.yaml".into(),
-            None,
-        );
+        let mut session = Session::new(SessionId::new("wf"), "wf".into(), "wf.yaml".into(), None);
         let before = session.updated_at;
 
         let step_id = StepSessionId::new("step1", 1);
@@ -350,12 +331,7 @@ mod tests {
 
     #[test]
     fn test_derive_status_running() {
-        let mut session = Session::new(
-            SessionId::new("wf"),
-            "wf".into(),
-            "wf.yaml".into(),
-            None,
-        );
+        let mut session = Session::new(SessionId::new("wf"), "wf".into(), "wf.yaml".into(), None);
         session.update_step(
             StepSessionId::new("a", 1),
             StepSession {
@@ -373,12 +349,7 @@ mod tests {
 
     #[test]
     fn test_derive_status_completed() {
-        let mut session = Session::new(
-            SessionId::new("wf"),
-            "wf".into(),
-            "wf.yaml".into(),
-            None,
-        );
+        let mut session = Session::new(SessionId::new("wf"), "wf".into(), "wf.yaml".into(), None);
         session.update_step(
             StepSessionId::new("a", 1),
             StepSession {
@@ -408,12 +379,7 @@ mod tests {
 
     #[test]
     fn test_derive_status_failed() {
-        let mut session = Session::new(
-            SessionId::new("wf"),
-            "wf".into(),
-            "wf.yaml".into(),
-            None,
-        );
+        let mut session = Session::new(SessionId::new("wf"), "wf".into(), "wf.yaml".into(), None);
         session.update_step(
             StepSessionId::new("a", 1),
             StepSession {
@@ -482,18 +448,8 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let store = SessionStore::new(tmp.path());
 
-        let s1 = Session::new(
-            SessionId::new("wf-a"),
-            "wf-a".into(),
-            "a.yaml".into(),
-            None,
-        );
-        let s2 = Session::new(
-            SessionId::new("wf-b"),
-            "wf-b".into(),
-            "b.yaml".into(),
-            None,
-        );
+        let s1 = Session::new(SessionId::new("wf-a"), "wf-a".into(), "a.yaml".into(), None);
+        let s2 = Session::new(SessionId::new("wf-b"), "wf-b".into(), "b.yaml".into(), None);
 
         store.save(&s1).unwrap();
         store.save(&s2).unwrap();
@@ -584,12 +540,7 @@ mod tests {
 
     #[test]
     fn test_session_summary_from_session() {
-        let session = Session::new(
-            SessionId::new("wf"),
-            "wf".into(),
-            "wf.yaml".into(),
-            None,
-        );
+        let session = Session::new(SessionId::new("wf"), "wf".into(), "wf.yaml".into(), None);
         let summary = SessionSummary::from(&session);
         assert_eq!(summary.id, session.id);
         assert_eq!(summary.workflow_name, session.workflow_name);
