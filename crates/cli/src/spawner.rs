@@ -67,7 +67,18 @@ impl AgentSpawner for OrchestratorSpawner {
 
         let session_dir = self.session_dir.clone();
 
+        // Resolve CWD once outside the async block for path resolution
+        let cwd = std::env::current_dir().ok();
+
         Box::pin(async move {
+            // Ensure session_dir is absolute so MCP config paths work regardless of CWD
+            let session_dir = if session_dir.is_absolute() {
+                session_dir
+            } else if let Some(ref cwd) = cwd {
+                cwd.join(&session_dir)
+            } else {
+                session_dir
+            };
             let agent_id = {
                 let mut orch = orchestrator.lock().await;
                 orch.spawn_agent(&agent_type, serde_json::json!({"step": &step_name}), None)
@@ -118,7 +129,7 @@ impl AgentSpawner for OrchestratorSpawner {
                 skill: step_clone.skill.clone(),
                 args,
                 prompt,
-                working_dir: None,
+                working_dir: cwd.as_ref().map(|p| p.to_string_lossy().into_owned()),
                 env: Default::default(),
                 context: ctx,
                 session_id: None,
