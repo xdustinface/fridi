@@ -1,5 +1,6 @@
 pub mod dag;
 pub mod engine;
+pub mod github;
 pub mod schema;
 pub mod session;
 
