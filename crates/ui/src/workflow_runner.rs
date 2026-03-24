@@ -61,7 +61,9 @@ impl WorkflowRunner {
         )?;
         let orchestrator = Arc::new(Mutex::new(orchestrator));
 
-        let (engine, event_rx) = Engine::new();
+        let (engine, _initial_rx) = Engine::new();
+        // Subscribe before spawning execution so no events are lost
+        let event_rx = engine.subscribe();
 
         let agent_definitions = if self.agents_dir.exists() {
             load_agent_definitions(&self.agents_dir).unwrap_or_default()
