@@ -86,7 +86,11 @@ pub(crate) fn App() -> Element {
             }
             SessionSource::Prompt { text } => {
                 let short = if text.len() > 40 {
-                    format!("{}...", &text[..40])
+                    let truncated = text
+                        .char_indices()
+                        .nth(40)
+                        .map_or(text.as_str(), |(i, _)| &text[..i]);
+                    format!("{truncated}...")
                 } else {
                     text.clone()
                 };
