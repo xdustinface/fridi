@@ -10,6 +10,7 @@ use crate::traits::{AgentError, AgentOutput};
 
 pub struct PtyProcess {
     output_tx: broadcast::Sender<AgentOutput>,
+    initial_rx: Option<broadcast::Receiver<AgentOutput>>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     running: Arc<AtomicBool>,
     collected_output: Arc<Mutex<Vec<u8>>>,
@@ -53,7 +54,7 @@ impl PtyProcess {
             .take_writer()
             .map_err(|e| AgentError::SpawnError(format!("failed to take PTY writer: {e}")))?;
 
-        let (output_tx, _) = broadcast::channel(1024);
+        let (output_tx, initial_rx) = broadcast::channel(1024);
         let running = Arc::new(AtomicBool::new(true));
         let collected_output = Arc::new(Mutex::new(Vec::new()));
 
@@ -88,6 +89,7 @@ impl PtyProcess {
 
         Ok(Self {
             output_tx,
+            initial_rx: Some(initial_rx),
             writer: Arc::new(Mutex::new(writer)),
             running,
             collected_output,
@@ -96,8 +98,13 @@ impl PtyProcess {
         })
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> {
-        self.output_tx.subscribe()
+    pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> { self.output_tx.subscribe() }
+
+    /// Returns the pre-subscribed receiver that was created before the reader
+    /// thread started, guaranteeing no output is missed. Returns `None` if
+    /// already taken.
+    pub fn take_initial_receiver(&mut self) -> Option<broadcast::Receiver<AgentOutput>> {
+        self.initial_rx.take()
     }
 
     pub async fn write_stdin(&self, data: &[u8]) -> Result<(), AgentError> {
@@ -137,9 +144,7 @@ impl PtyProcess {
         Ok(())
     }
 
-    pub fn is_running(&self) -> bool {
-        self.running.load(Ordering::Relaxed)
-    }
+    pub fn is_running(&self) -> bool { self.running.load(Ordering::Relaxed) }
 
     pub async fn collected_output(&self) -> String {
         let collected = self.collected_output.lock().await;
@@ -214,8 +219,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_late_subscriber_receives_output() {
-        // Spawn a PTY — do NOT subscribe before spawning
+    async fn test_initial_receiver_captures_all_output() {
         let mut cmd = CommandBuilder::new("echo");
         cmd.arg("hello late");
         let mut proc = PtyProcess::spawn(cmd).unwrap();
@@ -223,13 +227,14 @@ mod tests {
         // Small delay to let the reader task start producing output
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-        // Subscribe AFTER spawn (this is the suspected bug scenario)
-        let mut rx = proc.subscribe();
+        // Use the pre-subscribed receiver instead of a late subscribe
+        let mut rx = proc
+            .take_initial_receiver()
+            .expect("initial receiver should be available");
 
         let exit_code = proc.wait().await.unwrap();
         assert_eq!(exit_code, 0);
 
-        // Collect any Stdout events the late subscriber received
         let mut received = Vec::new();
         while let Ok(output) = rx.try_recv() {
             if let AgentOutput::Stdout(data) = output {
@@ -238,20 +243,22 @@ mod tests {
         }
         let text = String::from_utf8_lossy(&received);
 
-        // The late subscriber may or may not have received the output depending
-        // on timing. collected_output should always have it though.
         let collected = proc.collected_output().await;
         assert!(
             collected.contains("hello late"),
             "collected_output should always contain data, got: {collected}"
         );
 
-        // This assertion may fail — that would pinpoint the bug where output
-        // is lost between spawn and subscribe
         assert!(
             text.contains("hello late"),
-            "late subscriber should receive 'hello late', got: {text} \
+            "initial receiver should receive 'hello late', got: {text} \
              (collected_output has it: {collected})"
+        );
+
+        // Second call returns None since the receiver was already taken
+        assert!(
+            proc.take_initial_receiver().is_none(),
+            "take_initial_receiver should return None after first call"
         );
     }
 

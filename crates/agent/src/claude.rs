@@ -121,6 +121,10 @@ struct ClaudeAgentHandle {
 impl AgentHandle for ClaudeAgentHandle {
     fn subscribe(&self) -> broadcast::Receiver<AgentOutput> { self.pty.subscribe() }
 
+    fn take_initial_receiver(&mut self) -> Option<broadcast::Receiver<AgentOutput>> {
+        self.pty.take_initial_receiver()
+    }
+
     async fn write_stdin(&self, data: &[u8]) -> Result<(), AgentError> {
         self.pty.write_stdin(data).await
     }

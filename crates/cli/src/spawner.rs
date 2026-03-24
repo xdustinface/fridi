@@ -143,9 +143,13 @@ impl AgentSpawner for OrchestratorSpawner {
             let agent = ClaudeAgent::new(agent_config);
             let mut handle = agent.spawn(config).await.map_err(|e| e.to_string())?;
 
-            // Forward PTY output to engine events if a sender is available
+            // Forward PTY output to engine events if a sender is available.
+            // Use the pre-subscribed receiver to avoid missing output emitted
+            // between spawn and subscribe.
             let forwarder = event_tx.map(|tx| {
-                let mut rx = handle.subscribe();
+                let mut rx = handle
+                    .take_initial_receiver()
+                    .unwrap_or_else(|| handle.subscribe());
                 let name = step_name.clone();
                 tokio::spawn(async move {
                     while let Ok(output) = rx.recv().await {
