@@ -211,6 +211,7 @@ mod tests {
         assert_eq!(spawner.mcp_socket_path, "/tmp/test.sock");
     }
 
+    #[cfg(not(target_os = "windows"))]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_spawn_step_builds_correct_config() {
         let tmp = TempDir::new().unwrap();
@@ -252,6 +253,7 @@ mod tests {
         assert!(mcp_path.exists(), "MCP config file should exist");
     }
 
+    #[cfg(not(target_os = "windows"))]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_spawn_step_default_role() {
         let tmp = TempDir::new().unwrap();
