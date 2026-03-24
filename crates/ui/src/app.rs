@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use dioxus::prelude::*;
 use fridi_core::session::{Session, SessionId, SessionStore};
+use fridi_core::window_state::WindowState;
 
 use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::tab_bar::TabBar;
@@ -10,6 +11,7 @@ use crate::state::{self, TabInfo};
 use crate::styles;
 
 const SESSIONS_DIR: &str = ".fridi/sessions";
+const STATE_FILE: &str = ".fridi/fridi-state.json";
 
 #[component]
 pub(crate) fn App() -> Element {
@@ -17,18 +19,7 @@ pub(crate) fn App() -> Element {
     let workflows = use_signal(|| state::load_workflows(&workflows_dir));
 
     let store = use_signal(|| SessionStore::new(SESSIONS_DIR));
-
-    let mut tabs = use_signal(|| {
-        let summaries = state::load_sessions(&store.read());
-        summaries.iter().map(TabInfo::from).collect::<Vec<_>>()
-    });
-
-    let mut active_tab = use_signal(|| {
-        let t = tabs.read();
-        if t.is_empty() { None } else { Some(0) }
-    });
-
-    let mut showing_creator = use_signal(|| false);
+    let state_path = use_signal(|| PathBuf::from(STATE_FILE));
 
     // Derive repo from the first workflow that has one configured
     let default_repo: Option<String> = workflows
@@ -36,6 +27,51 @@ pub(crate) fn App() -> Element {
         .iter()
         .find_map(|(wf, _)| wf.config.repo.clone())
         .filter(|r| !r.is_empty());
+
+    // On startup: load window state and recover sessions
+    let mut window_state = use_signal(|| state::load_window_state(&state_path.read()));
+
+    let mut tabs = use_signal(|| {
+        let sessions = state::load_sessions_with_recovery(&store.read());
+        let repo_key = default_repo.clone().unwrap_or_default();
+        let ws = state::load_window_state(&state_path.read());
+        let (restored, _) = state::restore_tabs(&ws, &sessions, &repo_key);
+        if restored.is_empty() {
+            // Fall back to showing all sessions as tabs
+            sessions
+                .iter()
+                .map(|s| TabInfo {
+                    session_id: s.id.clone(),
+                    workflow_name: s.workflow_name.clone(),
+                    status: s.status.clone(),
+                })
+                .collect::<Vec<_>>()
+        } else {
+            restored
+        }
+    });
+
+    let mut active_tab = use_signal(|| {
+        let sessions = state::load_sessions_with_recovery(&store.read());
+        let repo_key = default_repo.clone().unwrap_or_default();
+        let ws = state::load_window_state(&state_path.read());
+        let (restored, active_idx) = state::restore_tabs(&ws, &sessions, &repo_key);
+        if restored.is_empty() {
+            let t = tabs.read();
+            if t.is_empty() { None } else { Some(0) }
+        } else {
+            active_idx
+        }
+    });
+
+    let mut showing_creator = use_signal(|| false);
+
+    // Helper to persist window state after tab changes
+    let save_window_state = move |ws: &WindowState| {
+        if let Err(e) = ws.save(&state_path.read()) {
+            eprintln!("failed to save window state: {e}");
+        }
+    };
 
     // Load the full session for the active tab
     let active_session: Option<Session> = {
@@ -48,15 +84,34 @@ pub(crate) fn App() -> Element {
         })
     };
 
+    let repo_for_select = default_repo.clone();
     let on_select_tab = move |idx: usize| {
         active_tab.set(Some(idx));
+        // Persist active tab change
+        let tabs_read = tabs.read();
+        if let Some(tab) = tabs_read.get(idx) {
+            let repo_key = repo_for_select.clone().unwrap_or_default();
+            let mut ws = window_state.write();
+            ws.set_active(&repo_key, tab.session_id.as_str());
+            save_window_state(&ws);
+        }
     };
 
+    let repo_for_close = default_repo.clone();
     let on_close_tab = move |idx: usize| {
         let mut t = tabs.write();
         if idx < t.len() {
+            let closed_session_id = t[idx].session_id.as_str().to_string();
             t.remove(idx);
             let len = t.len();
+
+            // Persist tab removal
+            let repo_key = repo_for_close.clone().unwrap_or_default();
+            let mut ws = window_state.write();
+            ws.update_tab(&repo_key, &closed_session_id, false);
+            save_window_state(&ws);
+            drop(ws);
+
             drop(t);
             if len == 0 {
                 active_tab.set(None);
@@ -75,6 +130,7 @@ pub(crate) fn App() -> Element {
         showing_creator.set(true);
     };
 
+    let repo_for_create = default_repo.clone();
     let on_create_session = move |source: SessionSource| {
         let (workflow_name, context_label) = match &source {
             SessionSource::Issue { number, title } => (
@@ -118,7 +174,7 @@ pub(crate) fn App() -> Element {
         }
 
         let tab = TabInfo {
-            session_id,
+            session_id: session_id.clone(),
             workflow_name: context_label,
             status: session.status.clone(),
         };
@@ -128,6 +184,13 @@ pub(crate) fn App() -> Element {
         drop(t);
         active_tab.set(Some(new_idx));
         showing_creator.set(false);
+
+        // Persist new tab in window state
+        let repo_key = repo_for_create.clone().unwrap_or_default();
+        let mut ws = window_state.write();
+        ws.update_tab(&repo_key, session_id.as_str(), true);
+        ws.set_active(&repo_key, session_id.as_str());
+        save_window_state(&ws);
     };
 
     let on_cancel_creator = move |()| {

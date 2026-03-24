@@ -124,6 +124,22 @@ impl Session {
         self.status = self.derive_status();
     }
 
+    /// Mark any steps that were `Running` at shutdown as `Failed("interrupted")`,
+    /// and set the session status to `Interrupted`.
+    pub fn mark_interrupted(&mut self) {
+        let mut had_running = false;
+        for step in self.steps.values_mut() {
+            if step.status == StepStatus::Running {
+                step.status = StepStatus::Failed("interrupted".into());
+                had_running = true;
+            }
+        }
+        if had_running || self.status == SessionStatus::Running {
+            self.status = SessionStatus::Interrupted;
+            self.updated_at = Utc::now();
+        }
+    }
+
     pub fn derive_status(&self) -> SessionStatus {
         let mut has_running = false;
         let mut has_failed = false;
@@ -246,6 +262,34 @@ impl SessionStore {
         }
         summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         Ok(summaries)
+    }
+
+    /// Load all sessions, marking any that were `Running` as `Interrupted`.
+    /// Interrupted sessions are persisted back to disk.
+    pub fn load_all_and_recover(&self) -> Result<Vec<Session>, SessionStoreError> {
+        if !self.base_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut sessions = Vec::new();
+        for entry in fs::read_dir(&self.base_dir)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
+            }
+            let session_file = entry.path().join("session.json");
+            if session_file.exists() {
+                let content = fs::read_to_string(&session_file)?;
+                let mut session: Session = serde_json::from_str(&content)?;
+                if session.status == SessionStatus::Running {
+                    session.mark_interrupted();
+                    self.save(&session)?;
+                }
+                sessions.push(session);
+            }
+        }
+        sessions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(sessions)
     }
 
     pub fn delete(&self, id: &SessionId) -> Result<(), SessionStoreError> {
@@ -586,5 +630,139 @@ mod tests {
         assert!(!id.as_str().contains('/'));
         assert!(!id.as_str().contains('\\'));
         assert!(!id.as_str().contains(".."));
+    }
+
+    #[test]
+    fn test_interrupted_session_detection() {
+        let mut session = Session::new(
+            SessionId::new("wf"),
+            "wf".into(),
+            "wf.yaml".into(),
+            Some("owner/repo".into()),
+        );
+
+        // Add a completed step and a running step
+        session.update_step(
+            StepSessionId::new("done", 1),
+            StepSession {
+                step_name: "done".into(),
+                attempt: 1,
+                status: StepStatus::Completed,
+                claude_session_id: Some("sess-1".into()),
+                output_summary: None,
+                started_at: Some(Utc::now()),
+                finished_at: Some(Utc::now()),
+            },
+        );
+        session.update_step(
+            StepSessionId::new("active", 1),
+            StepSession {
+                step_name: "active".into(),
+                attempt: 1,
+                status: StepStatus::Running,
+                claude_session_id: Some("sess-2".into()),
+                output_summary: None,
+                started_at: Some(Utc::now()),
+                finished_at: None,
+            },
+        );
+
+        assert_eq!(session.status, SessionStatus::Running);
+
+        session.mark_interrupted();
+
+        assert_eq!(session.status, SessionStatus::Interrupted);
+
+        // The running step should be marked as failed with "interrupted"
+        let active_step = &session.steps[&StepSessionId::new("active", 1)];
+        assert!(matches!(&active_step.status, StepStatus::Failed(msg) if msg == "interrupted"));
+
+        // The completed step should remain unchanged
+        let done_step = &session.steps[&StepSessionId::new("done", 1)];
+        assert_eq!(done_step.status, StepStatus::Completed);
+    }
+
+    #[test]
+    fn test_mark_interrupted_no_running_steps() {
+        let mut session = Session::new(SessionId::new("wf"), "wf".into(), "wf.yaml".into(), None);
+        session.update_step(
+            StepSessionId::new("s1", 1),
+            StepSession {
+                step_name: "s1".into(),
+                attempt: 1,
+                status: StepStatus::Completed,
+                claude_session_id: None,
+                output_summary: None,
+                started_at: None,
+                finished_at: None,
+            },
+        );
+        // Force status to completed
+        session.status = SessionStatus::Completed;
+
+        session.mark_interrupted();
+
+        // Should not change status if already completed with no running steps
+        assert_eq!(session.status, SessionStatus::Completed);
+    }
+
+    #[test]
+    fn test_load_all_and_recover() {
+        let tmp = TempDir::new().unwrap();
+        let store = SessionStore::new(tmp.path());
+
+        // Save a running session
+        let mut running = Session::new(
+            SessionId::new("running"),
+            "running".into(),
+            "r.yaml".into(),
+            None,
+        );
+        running.update_step(
+            StepSessionId::new("step", 1),
+            StepSession {
+                step_name: "step".into(),
+                attempt: 1,
+                status: StepStatus::Running,
+                claude_session_id: Some("sess-abc".into()),
+                output_summary: None,
+                started_at: Some(Utc::now()),
+                finished_at: None,
+            },
+        );
+        store.save(&running).unwrap();
+
+        // Save a completed session
+        let mut completed =
+            Session::new(SessionId::new("done"), "done".into(), "d.yaml".into(), None);
+        completed.update_step(
+            StepSessionId::new("step", 1),
+            StepSession {
+                step_name: "step".into(),
+                attempt: 1,
+                status: StepStatus::Completed,
+                claude_session_id: None,
+                output_summary: None,
+                started_at: None,
+                finished_at: None,
+            },
+        );
+        store.save(&completed).unwrap();
+
+        let sessions = store.load_all_and_recover().unwrap();
+        assert_eq!(sessions.len(), 2);
+
+        let recovered = sessions
+            .iter()
+            .find(|s| s.workflow_name == "running")
+            .unwrap();
+        assert_eq!(recovered.status, SessionStatus::Interrupted);
+
+        let still_done = sessions.iter().find(|s| s.workflow_name == "done").unwrap();
+        assert_eq!(still_done.status, SessionStatus::Completed);
+
+        // Verify the interrupted session was persisted to disk
+        let reloaded = store.load(&running.id).unwrap();
+        assert_eq!(reloaded.status, SessionStatus::Interrupted);
     }
 }
