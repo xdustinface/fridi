@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use dioxus::prelude::*;
 use fridi_core::session::{Session, SessionId, SessionStore};
 
+use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::tab_bar::TabBar;
-use crate::components::workflow_picker::WorkflowPicker;
 use crate::components::workflow_view::WorkflowView;
 use crate::state::{self, TabInfo};
 use crate::styles;
@@ -28,7 +28,14 @@ pub(crate) fn App() -> Element {
         if t.is_empty() { None } else { Some(0) }
     });
 
-    let mut showing_picker = use_signal(|| false);
+    let mut showing_creator = use_signal(|| false);
+
+    // Derive repo from the first workflow that has one configured
+    let default_repo: Option<String> = workflows
+        .read()
+        .iter()
+        .find_map(|(wf, _)| wf.config.repo.clone())
+        .filter(|r| !r.is_empty());
 
     // Load the full session for the active tab
     let active_session: Option<Session> = {
@@ -65,16 +72,43 @@ pub(crate) fn App() -> Element {
     };
 
     let on_new_tab = move |()| {
-        showing_picker.set(true);
+        showing_creator.set(true);
     };
 
-    let on_pick_workflow = move |(wf, path): (fridi_core::schema::Workflow, PathBuf)| {
-        let session_id = SessionId::new(&wf.name);
-        let repo = wf.config.repo.clone();
+    let on_create_session = move |source: SessionSource| {
+        let (workflow_name, context_label) = match &source {
+            SessionSource::Issue { number, title } => (
+                format!("issue-{number}"),
+                format!("Issue #{number}: {title}"),
+            ),
+            SessionSource::PR { number, title } => {
+                (format!("pr-{number}"), format!("PR #{number}: {title}"))
+            }
+            SessionSource::Prompt { text } => {
+                let short = if text.len() > 40 {
+                    let truncated = text
+                        .char_indices()
+                        .nth(40)
+                        .map_or(text.as_str(), |(i, _)| &text[..i]);
+                    format!("{truncated}...")
+                } else {
+                    text.clone()
+                };
+                ("prompt".to_string(), short)
+            }
+        };
+
+        let session_id = SessionId::new(&workflow_name);
+        let repo = workflows
+            .read()
+            .iter()
+            .find_map(|(wf, _)| wf.config.repo.clone())
+            .filter(|r| !r.is_empty());
+
         let session = Session::new(
             session_id.clone(),
-            wf.name.clone(),
-            path.to_string_lossy().into_owned(),
+            context_label.clone(),
+            String::new(),
             repo,
         );
 
@@ -85,7 +119,7 @@ pub(crate) fn App() -> Element {
 
         let tab = TabInfo {
             session_id,
-            workflow_name: wf.name.clone(),
+            workflow_name: context_label,
             status: session.status.clone(),
         };
         let mut t = tabs.write();
@@ -93,11 +127,11 @@ pub(crate) fn App() -> Element {
         t.push(tab);
         drop(t);
         active_tab.set(Some(new_idx));
-        showing_picker.set(false);
+        showing_creator.set(false);
     };
 
-    let on_cancel_picker = move |()| {
-        showing_picker.set(false);
+    let on_cancel_creator = move |()| {
+        showing_creator.set(false);
     };
 
     rsx! {
@@ -115,15 +149,15 @@ pub(crate) fn App() -> Element {
                     WorkflowView { session: session }
                 } else {
                     div { class: "empty-state",
-                        "Click + to start a new workflow"
+                        "Click + to start a new session"
                     }
                 }
             }
-            if *showing_picker.read() {
-                WorkflowPicker {
-                    workflows: workflows.read().clone(),
-                    on_select: on_pick_workflow,
-                    on_cancel: on_cancel_picker,
+            if *showing_creator.read() {
+                SessionCreator {
+                    repo: default_repo.clone(),
+                    on_create: on_create_session,
+                    on_cancel: on_cancel_creator,
                 }
             }
         }
