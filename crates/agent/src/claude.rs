@@ -84,6 +84,11 @@ impl Agent for ClaudeAgent {
             cmd.arg(prompt);
         }
 
+        if let Some(mcp_config_path) = &config.mcp_config {
+            cmd.arg("--mcp-config");
+            cmd.arg(mcp_config_path);
+        }
+
         if let Some(dir) = &config.working_dir {
             cmd.cwd(dir);
         }
@@ -228,6 +233,26 @@ mod tests {
                 "generated session id is not a valid UUID: {sid}"
             );
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_claude_agent_mcp_config() {
+        let config = AgentConfig {
+            agent_type: "claude".into(),
+            mcp_config: Some("/tmp/mcp-config.json".to_string()),
+            ..Default::default()
+        };
+        let mut handle = spawn_echo_agent(config).await;
+        let _ = handle.wait().await;
+        let output = handle.collected_output();
+        assert!(
+            output.contains("--mcp-config"),
+            "expected --mcp-config in output: {output}"
+        );
+        assert!(
+            output.contains("/tmp/mcp-config.json"),
+            "expected mcp config path in output: {output}"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
