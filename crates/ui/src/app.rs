@@ -110,17 +110,13 @@ pub(crate) fn App() -> Element {
 
     // Load the full session for the active tab
     let active_session: Option<Session> = {
-        if *is_home.read() {
-            None
-        } else {
-            let tabs_read = tabs.read();
-            let active = *active_tab.read();
-            active.and_then(|idx| {
-                tabs_read
-                    .get(idx)
-                    .and_then(|tab| store.read().load(&tab.session_id).ok())
-            })
-        }
+        let tabs_read = tabs.read();
+        let active = *active_tab.read();
+        active.and_then(|idx| {
+            tabs_read
+                .get(idx)
+                .and_then(|tab| store.read().load(&tab.session_id).ok())
+        })
     };
 
     let on_select_home = move |()| {
