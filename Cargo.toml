@@ -77,5 +77,8 @@ temp-env = "0.3"
 # ANSI
 strip-ansi-escapes = "0.2"
 
+# Encoding
+base64 = "0.22"
+
 # Dioxus
 dioxus = { version = "0.7" }
