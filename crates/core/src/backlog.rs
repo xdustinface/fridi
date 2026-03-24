@@ -142,7 +142,9 @@ impl Backlog {
     pub(crate) fn items(&self) -> &[BacklogItem] { &self.items }
 }
 
-/// Extract `#tag` tokens from text.
+/// Extract `#tag` tokens from text. Operates on raw bytes for performance;
+/// this is safe because `is_tag_char` only accepts ASCII bytes, so byte
+/// offsets are always valid UTF-8 boundaries.
 fn extract_tags(text: &str) -> Vec<String> {
     let mut tags = Vec::new();
     let bytes = text.as_bytes();
