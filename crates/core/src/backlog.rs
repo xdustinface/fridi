@@ -229,15 +229,15 @@ fn parse_items(content: &str) -> Vec<BacklogItem> {
 }
 
 /// Extract optional `<!-- ctx:name ISO8601 -->` or `<!-- ISO8601 -->` from the
-/// end of a line. Returns `(body, context, timestamp)`.
+/// end of a line. Returns `(body, context, timestamp)`. Uses `Utc::now()` only
+/// when no HTML comment is present; logs a warning if a comment exists but
+/// cannot be parsed (to avoid silent timestamp corruption on load-save cycles).
 fn parse_comment_metadata(text: &str) -> (&str, Option<String>, DateTime<Utc>) {
-    let fallback = || (text, None, Utc::now());
-
     let Some(start) = text.rfind("<!--") else {
-        return fallback();
+        return (text, None, Utc::now());
     };
     let Some(end) = text[start..].find("-->") else {
-        return fallback();
+        return (text, None, Utc::now());
     };
 
     let comment_inner = text[start + 4..start + end].trim();
@@ -259,7 +259,11 @@ fn parse_comment_metadata(text: &str) -> (&str, Option<String>, DateTime<Utc>) {
         return (body, None, ts);
     }
 
-    fallback()
+    eprintln!(
+        "warning: failed to parse backlog comment metadata: {:?}",
+        comment_inner
+    );
+    (body, None, Utc::now())
 }
 
 #[cfg(test)]
