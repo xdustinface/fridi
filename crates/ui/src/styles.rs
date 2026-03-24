@@ -693,7 +693,7 @@ body {
 .terminal-xterm-container {
     flex: 1;
     overflow: hidden;
-    padding: var(--space-2);
+    width: 100%;
     background-color: var(--surface-0);
 }
 
