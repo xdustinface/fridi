@@ -158,7 +158,7 @@ impl Workflow {
     }
 }
 
-/// Interpolate `${ENV_VAR}` patterns with environment variable values
+/// Interpolate `${ENV_VAR}` patterns with environment variable values.
 pub fn interpolate_env(input: &str) -> String {
     let mut result = input.to_string();
     while let Some(start) = result.find("${") {
@@ -176,6 +176,17 @@ pub fn interpolate_env(input: &str) -> String {
         }
     }
     result
+}
+
+/// Replace `${FRIDI_REPO}` with the provided repo value.
+/// Other `${VAR}` patterns are resolved from the environment.
+pub fn interpolate_with_repo(input: &str, repo: &str) -> String {
+    let replaced = if !repo.is_empty() {
+        input.replace("${FRIDI_REPO}", repo)
+    } else {
+        input.to_string()
+    };
+    interpolate_env(&replaced)
 }
 
 #[cfg(test)]
@@ -271,6 +282,26 @@ steps:
         assert_eq!(interpolate_env("${TEST_FRIDI_VAR}"), "hello");
         assert_eq!(interpolate_env("no_vars"), "no_vars");
         std::env::remove_var("TEST_FRIDI_VAR");
+    }
+
+    #[test]
+    fn test_interpolate_with_repo() {
+        assert_eq!(
+            interpolate_with_repo("owner/${FRIDI_REPO}/path", "my/repo"),
+            "owner/my/repo/path"
+        );
+        // Empty repo falls back to env var resolution for FRIDI_REPO
+        std::env::set_var("FRIDI_REPO", "env/repo");
+        assert_eq!(
+            interpolate_with_repo("owner/${FRIDI_REPO}/path", ""),
+            "owner/env/repo/path"
+        );
+        std::env::remove_var("FRIDI_REPO");
+        // No placeholder at all
+        assert_eq!(
+            interpolate_with_repo("plain-value", "my/repo"),
+            "plain-value"
+        );
     }
 
     #[test]

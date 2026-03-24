@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use dioxus::prelude::*;
 use fridi_core::engine::EngineEvent;
+use fridi_core::schema::interpolate_with_repo;
 use fridi_core::session::{Session, SessionId, SessionStore};
 use fridi_core::window_state::WindowState;
 use tokio::sync::broadcast;
@@ -18,6 +19,10 @@ const SESSIONS_DIR: &str = ".fridi/sessions";
 const AGENTS_DIR: &str = "agents";
 const STATE_FILE: &str = ".fridi/fridi-state.json";
 
+/// Repo detected at startup, provided via Dioxus context.
+#[derive(Clone)]
+pub(crate) struct DetectedRepo(pub(crate) Option<String>);
+
 #[component]
 pub(crate) fn App() -> Element {
     let workflows_dir = PathBuf::from("./workflows");
@@ -26,11 +31,23 @@ pub(crate) fn App() -> Element {
     let store = use_signal(|| SessionStore::new(SESSIONS_DIR));
     let state_path = use_signal(|| PathBuf::from(STATE_FILE));
 
-    // Derive repo from the first workflow that has one configured
-    let default_repo: Option<String> = workflows
-        .read()
-        .iter()
-        .find_map(|(wf, _)| wf.config.repo.clone())
+    // Retrieve the repo detected once at startup
+    let detected_repo = use_context::<DetectedRepo>().0;
+
+    let default_repo: Option<String> = detected_repo
+        .or_else(|| {
+            let repo_val = "";
+            workflows
+                .read()
+                .iter()
+                .find_map(|(wf, _)| {
+                    wf.config
+                        .repo
+                        .as_ref()
+                        .map(|r| interpolate_with_repo(r, repo_val))
+                })
+                .filter(|r| !r.is_empty())
+        })
         .filter(|r| !r.is_empty());
 
     // On startup: load window state and recover sessions
@@ -168,11 +185,7 @@ pub(crate) fn App() -> Element {
         };
 
         let session_id = SessionId::new(&workflow_name);
-        let repo = workflows
-            .read()
-            .iter()
-            .find_map(|(wf, _)| wf.config.repo.clone())
-            .filter(|r| !r.is_empty());
+        let repo = repo_for_create.clone();
 
         let session = Session::new(
             session_id.clone(),
