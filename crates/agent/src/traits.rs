@@ -45,6 +45,9 @@ pub struct AgentConfig {
 #[async_trait]
 pub trait AgentHandle: Send + Sync {
     fn subscribe(&self) -> broadcast::Receiver<AgentOutput>;
+    /// Returns the pre-subscribed receiver created before the reader thread
+    /// started. Guarantees no output is lost between spawn and subscribe.
+    fn take_initial_receiver(&mut self) -> Option<broadcast::Receiver<AgentOutput>>;
     async fn write_stdin(&self, data: &[u8]) -> Result<(), AgentError>;
     async fn wait(&mut self) -> Result<i32, AgentError>;
     async fn kill(&mut self) -> Result<(), AgentError>;
