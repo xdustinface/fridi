@@ -128,8 +128,10 @@ pub(crate) fn TerminalView(
                 (function() {{
                     let t = window.fridiTerminals['{tid}'];
                     if (!t) return;
-                    let raw = atob('{b64}');
-                    t.write(raw);
+                    let binary = atob('{b64}');
+                    let bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    t.write(bytes);
                 }})();
                 "#,
             );
