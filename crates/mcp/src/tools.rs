@@ -39,12 +39,12 @@ pub enum McpToolResult {
 }
 
 /// Tool names as string constants for permission checking
-pub(crate) const TOOL_SEND_MESSAGE: &str = "send_message";
-pub(crate) const TOOL_READ_MESSAGES: &str = "read_messages";
-pub(crate) const TOOL_UPDATE_STATUS: &str = "update_status";
-pub(crate) const TOOL_REPORT_RESULT: &str = "report_result";
-pub(crate) const TOOL_SPAWN_AGENT: &str = "spawn_agent";
-pub(crate) const TOOL_LIST_AGENTS: &str = "list_agents";
+pub const TOOL_SEND_MESSAGE: &str = "send_message";
+pub const TOOL_READ_MESSAGES: &str = "read_messages";
+pub const TOOL_UPDATE_STATUS: &str = "update_status";
+pub const TOOL_REPORT_RESULT: &str = "report_result";
+pub const TOOL_SPAWN_AGENT: &str = "spawn_agent";
+pub const TOOL_LIST_AGENTS: &str = "list_agents";
 
 /// Tools that require coordinator-level access
 pub(crate) const COORDINATOR_TOOLS: &[&str] = &[TOOL_SPAWN_AGENT, TOOL_LIST_AGENTS];
