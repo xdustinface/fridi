@@ -98,6 +98,19 @@ pub fn detect_repo() -> Option<String> {
     parse_repo_from_url(&url)
 }
 
+/// Detect the GitHub `owner/repo` from a specific directory's git remote.
+pub fn detect_repo_in(dir: &std::path::Path) -> Option<String> {
+    let output = Command::new("git")
+        .args(["-C", &dir.to_string_lossy(), "remote", "get-url", "origin"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    parse_repo_from_url(&url)
+}
+
 pub(crate) fn parse_repo_from_url(url: &str) -> Option<String> {
     // ssh:// scheme: ssh://git@github.com/owner/repo.git
     if url.starts_with("ssh://") {
