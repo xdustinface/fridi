@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use fridi_agent::claude::ClaudeAgent;
@@ -16,7 +15,6 @@ use tracing::{debug, info};
 pub struct OrchestratorSpawner {
     orchestrator: Arc<Mutex<Orchestrator>>,
     claude_agent: ClaudeAgent,
-    mcp_config_dir: PathBuf,
     mcp_socket_path: String,
 }
 
@@ -24,13 +22,11 @@ impl OrchestratorSpawner {
     pub fn new(
         orchestrator: Arc<Mutex<Orchestrator>>,
         claude_agent: ClaudeAgent,
-        mcp_config_dir: PathBuf,
         mcp_socket_path: String,
     ) -> Self {
         Self {
             orchestrator,
             claude_agent,
-            mcp_config_dir,
             mcp_socket_path,
         }
     }
@@ -46,7 +42,6 @@ impl AgentSpawner for OrchestratorSpawner {
         let orchestrator = Arc::clone(&self.orchestrator);
         let step = step.clone();
         let agent_context = context.as_agent_context();
-        let mcp_config_dir = self.mcp_config_dir.clone();
         let mcp_socket_path = self.mcp_socket_path.clone();
         let claude_agent = self.claude_agent.clone();
 
@@ -54,10 +49,13 @@ impl AgentSpawner for OrchestratorSpawner {
             let role = step.agent.as_deref().unwrap_or("claude");
 
             // Register the agent in the orchestrator for session bookkeeping
-            let agent_id = {
+            let (agent_id, mcp_config_dir) = {
                 let mut orch = orchestrator.lock().await;
-                orch.spawn_agent(role, serde_json::json!({}), None)
-                    .map_err(|e| format!("orchestrator spawn failed: {e}"))?
+                let id = orch
+                    .spawn_agent(role, serde_json::json!({}), None)
+                    .map_err(|e| format!("orchestrator spawn failed: {e}"))?;
+                let dir = orch.session_dir().join("mcp");
+                (id, dir)
             };
 
             // Write MCP config so the agent can communicate back
@@ -194,12 +192,9 @@ mod tests {
             default_args: vec![],
         });
 
-        let mcp_config_dir = tmp.path().join("mcp");
-
         OrchestratorSpawner::new(
             Arc::new(Mutex::new(orchestrator)),
             claude_agent,
-            mcp_config_dir,
             "/tmp/test.sock".into(),
         )
     }
@@ -248,8 +243,9 @@ mod tests {
         assert_eq!(entry.status, "completed");
         assert!(entry.claude_session_id.is_some());
 
-        // Verify MCP config was written
-        let mcp_path = tmp.path().join("mcp/claude-1.json");
+        // Verify MCP config was written under the session directory
+        let session_id = orch.session().id.as_str();
+        let mcp_path = tmp.path().join(format!("{session_id}/mcp/claude-1.json"));
         assert!(mcp_path.exists(), "MCP config file should exist");
     }
 
