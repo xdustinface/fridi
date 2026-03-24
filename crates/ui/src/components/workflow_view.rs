@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use fridi_core::engine::StepStatus;
-use fridi_core::schema::Trigger;
+use fridi_core::schema::{Trigger, interpolate_env};
 use fridi_core::session::Session;
 
 use crate::components::step_card::StepCard;
@@ -99,8 +99,13 @@ pub(crate) fn WorkflowView(session: Session, live_state: Option<LiveWorkflowStat
                     }
                 }
                 if let Some(repo) = &session.repo {
-                    div { class: "workflow-meta",
-                        span { class: "meta-tag", "repo: {repo}" }
+                    {
+                        let display_repo = interpolate_env(repo);
+                        rsx! {
+                            div { class: "workflow-meta",
+                                span { class: "meta-tag", "repo: {display_repo}" }
+                            }
+                        }
                     }
                 }
             }

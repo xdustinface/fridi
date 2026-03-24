@@ -33,6 +33,42 @@ pub enum GitHubError {
     Parse(#[from] serde_json::Error),
 }
 
+/// Detect the GitHub `owner/repo` from the current directory's git remote.
+pub fn detect_repo() -> Option<String> {
+    let output = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    parse_repo_from_url(&url)
+}
+
+fn parse_repo_from_url(url: &str) -> Option<String> {
+    // SSH: git@github.com:owner/repo.git (or custom aliases like git@github-dust:owner/repo)
+    if url.contains('@') {
+        if let Some(colon_pos) = url.rfind(':') {
+            let path = &url[colon_pos + 1..];
+            let cleaned = path.trim_end_matches(".git");
+            if cleaned.contains('/') {
+                return Some(cleaned.to_string());
+            }
+        }
+    }
+    // HTTPS: https://github.com/owner/repo.git
+    if url.starts_with("http") {
+        let parts: Vec<&str> = url.trim_end_matches(".git").split('/').collect();
+        if parts.len() >= 2 {
+            let repo = parts[parts.len() - 1];
+            let owner = parts[parts.len() - 2];
+            return Some(format!("{owner}/{repo}"));
+        }
+    }
+    None
+}
+
 /// Fetch open issues for a repository using the `gh` CLI.
 pub fn fetch_issues(repo: &str) -> Result<Vec<GitHubIssue>, GitHubError> {
     let output = Command::new("gh")
@@ -104,4 +140,54 @@ pub fn auto_pick_issue(repo: &str) -> Result<Option<GitHubIssue>, GitHubError> {
     });
 
     Ok(Some(priority_issue.unwrap_or(&issues[0]).clone()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_repo_from_ssh_url() {
+        assert_eq!(
+            parse_repo_from_url("git@github.com:owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_from_ssh_url_no_suffix() {
+        assert_eq!(
+            parse_repo_from_url("git@github.com:owner/repo"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_from_ssh_custom_alias() {
+        assert_eq!(
+            parse_repo_from_url("git@github-dust:owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_from_https_url() {
+        assert_eq!(
+            parse_repo_from_url("https://github.com/owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_from_https_url_no_suffix() {
+        assert_eq!(
+            parse_repo_from_url("https://github.com/owner/repo"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_from_invalid_url() {
+        assert_eq!(parse_repo_from_url("not-a-url"), None);
+    }
 }

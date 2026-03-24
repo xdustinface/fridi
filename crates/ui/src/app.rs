@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use dioxus::prelude::*;
 use fridi_core::engine::EngineEvent;
+use fridi_core::github;
+use fridi_core::schema::interpolate_env;
 use fridi_core::session::{Session, SessionId, SessionStore};
 use fridi_core::window_state::WindowState;
 use tokio::sync::broadcast;
@@ -26,11 +28,20 @@ pub(crate) fn App() -> Element {
     let store = use_signal(|| SessionStore::new(SESSIONS_DIR));
     let state_path = use_signal(|| PathBuf::from(STATE_FILE));
 
-    // Derive repo from the first workflow that has one configured
-    let default_repo: Option<String> = workflows
-        .read()
-        .iter()
-        .find_map(|(wf, _)| wf.config.repo.clone())
+    // Auto-detect repo from git remote, falling back to workflow config
+    let detected_repo = github::detect_repo();
+    if let Some(ref repo) = detected_repo {
+        std::env::set_var("FRIDI_REPO", repo);
+    }
+
+    let default_repo: Option<String> = detected_repo
+        .or_else(|| {
+            workflows
+                .read()
+                .iter()
+                .find_map(|(wf, _)| wf.config.repo.as_ref().map(|r| interpolate_env(r)))
+                .filter(|r| !r.is_empty())
+        })
         .filter(|r| !r.is_empty());
 
     // On startup: load window state and recover sessions
@@ -168,11 +179,7 @@ pub(crate) fn App() -> Element {
         };
 
         let session_id = SessionId::new(&workflow_name);
-        let repo = workflows
-            .read()
-            .iter()
-            .find_map(|(wf, _)| wf.config.repo.clone())
-            .filter(|r| !r.is_empty());
+        let repo = repo_for_create.clone();
 
         let session = Session::new(
             session_id.clone(),
