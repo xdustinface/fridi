@@ -7,6 +7,7 @@ use fridi_core::session::{Session, SessionId, SessionStore};
 use fridi_core::window_state::WindowState;
 use tokio::sync::broadcast;
 
+use crate::components::home_dashboard::HomeDashboard;
 use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::tab_bar::TabBar;
 use crate::components::workflow_view::WorkflowView;
@@ -73,6 +74,7 @@ pub(crate) fn App() -> Element {
         }
     });
 
+    // Track which tab is active; None means home tab
     let mut active_tab = use_signal(|| {
         let sessions = state::load_sessions_with_recovery(&store.read());
         let repo_key = default_repo.clone().unwrap_or_default();
@@ -85,6 +87,9 @@ pub(crate) fn App() -> Element {
             active_idx
         }
     });
+
+    // Whether the home tab is currently selected
+    let mut home_active = use_signal(|| active_tab.read().is_none());
 
     let mut showing_creator = use_signal(|| false);
 
@@ -105,17 +110,28 @@ pub(crate) fn App() -> Element {
 
     // Load the full session for the active tab
     let active_session: Option<Session> = {
-        let tabs_read = tabs.read();
-        let active = *active_tab.read();
-        active.and_then(|idx| {
-            tabs_read
-                .get(idx)
-                .and_then(|tab| store.read().load(&tab.session_id).ok())
-        })
+        let is_home = *home_active.read();
+        if is_home {
+            None
+        } else {
+            let tabs_read = tabs.read();
+            let active = *active_tab.read();
+            active.and_then(|idx| {
+                tabs_read
+                    .get(idx)
+                    .and_then(|tab| store.read().load(&tab.session_id).ok())
+            })
+        }
+    };
+
+    let on_select_home = move |()| {
+        home_active.set(true);
+        active_tab.set(None);
     };
 
     let repo_for_select = default_repo.clone();
     let on_select_tab = move |idx: usize| {
+        home_active.set(false);
         active_tab.set(Some(idx));
         // Persist active tab change
         let tabs_read = tabs.read();
@@ -144,6 +160,8 @@ pub(crate) fn App() -> Element {
 
             drop(t);
             if len == 0 {
+                // No session tabs left, go to home
+                home_active.set(true);
                 active_tab.set(None);
             } else {
                 let current = active_tab.read().unwrap_or(0);
@@ -230,6 +248,7 @@ pub(crate) fn App() -> Element {
         let new_idx = t.len();
         t.push(tab);
         drop(t);
+        home_active.set(false);
         active_tab.set(Some(new_idx));
         showing_creator.set(false);
 
@@ -245,26 +264,30 @@ pub(crate) fn App() -> Element {
         showing_creator.set(false);
     };
 
+    let is_home = *home_active.read();
+
     rsx! {
         document::Style { {styles::APP_CSS} }
         div { class: "app-layout",
             TabBar {
                 tabs: tabs.read().clone(),
                 active: *active_tab.read(),
+                home_active: is_home,
                 on_select: on_select_tab,
+                on_select_home,
                 on_close: on_close_tab,
                 on_new: on_new_tab,
             }
             div { class: "main-content",
-                if let Some(session) = active_session {
+                if is_home {
+                    HomeDashboard { repo: default_repo.clone() }
+                } else if let Some(session) = active_session {
                     WorkflowView {
                         session,
                         live_state: Some(live_state.read().clone()),
                     }
                 } else {
-                    div { class: "empty-state",
-                        "Click + to start a new session"
-                    }
+                    div { class: "empty-state", "Click + to start a new session" }
                 }
             }
             if *showing_creator.read() {
