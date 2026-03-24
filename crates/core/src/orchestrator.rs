@@ -91,11 +91,12 @@ impl Orchestrator {
         session_dir: PathBuf,
     ) -> Self {
         let (spawn_tx, spawn_rx) = mpsc::channel(64);
+        let agent_counts = Self::build_agent_counts(&session);
         Self {
             session,
             store,
             role_configs,
-            agent_counts: HashMap::new(),
+            agent_counts,
             spawn_tx: Some(spawn_tx),
             spawn_rx,
             repo: repo.to_string(),
@@ -113,6 +114,26 @@ impl Orchestrator {
     ) -> Result<Self, OrchestratorError> {
         let role_configs = load_role_configs(agents_dir)?;
         Ok(Self::new(session, store, role_configs, repo, session_dir))
+    }
+
+    /// Scan existing agents in a session and compute the highest assigned
+    /// number per role so that newly spawned agents never collide with
+    /// persisted ones.
+    fn build_agent_counts(session: &Session) -> HashMap<String, usize> {
+        let mut counts: HashMap<String, usize> = HashMap::new();
+        for entry in session.agents.values() {
+            if let Some(n) = entry
+                .id
+                .rsplit_once('-')
+                .and_then(|(_, suffix)| suffix.parse::<usize>().ok())
+            {
+                let current = counts.entry(entry.role.clone()).or_insert(0);
+                if n > *current {
+                    *current = n;
+                }
+            }
+        }
+        counts
     }
 
     /// Spawn an agent with the given role, returning its assigned ID.
@@ -491,5 +512,65 @@ mod tests {
         assert_eq!(orch.session().agents.len(), 2);
         assert!(orch.session().agents.contains_key("developer-1"));
         assert!(orch.session().agents.contains_key("qa-1"));
+    }
+
+    #[test]
+    fn test_agent_counts_initialized_from_persisted_session() {
+        let tmp = TempDir::new().unwrap();
+        let store = SessionStore::new(tmp.path());
+        let mut session = test_session();
+
+        // Simulate a persisted session that already has agents
+        session.add_agent(AgentEntry {
+            id: "developer-1".into(),
+            role: "developer".into(),
+            claude_session_id: None,
+            status: "done".into(),
+            parent: None,
+            spawned_at: Utc::now(),
+        });
+        session.add_agent(AgentEntry {
+            id: "developer-3".into(),
+            role: "developer".into(),
+            claude_session_id: None,
+            status: "running".into(),
+            parent: None,
+            spawned_at: Utc::now(),
+        });
+        session.add_agent(AgentEntry {
+            id: "qa-2".into(),
+            role: "qa".into(),
+            claude_session_id: None,
+            status: "done".into(),
+            parent: None,
+            spawned_at: Utc::now(),
+        });
+
+        store.save(&session).unwrap();
+
+        let session_dir = tmp.path().join(session.id.as_str());
+        let mut orch = Orchestrator::new(
+            session,
+            store,
+            test_role_configs(),
+            "owner/repo",
+            session_dir,
+        );
+
+        // New developer should be 4 (max existing is 3)
+        let dev_id = orch
+            .spawn_agent("developer", serde_json::json!({}), None)
+            .unwrap();
+        assert_eq!(dev_id, "developer-4");
+
+        // New qa should be 3 (max existing is 2)
+        let qa_id = orch.spawn_agent("qa", serde_json::json!({}), None).unwrap();
+        assert_eq!(qa_id, "qa-3");
+
+        // New coordinator should be 1 (none existed before)
+        let coord_id = orch
+            .spawn_agent("coordinator", serde_json::json!({}), None)
+            .unwrap();
+        assert_eq!(coord_id, "coordinator-1");
     }
 }
