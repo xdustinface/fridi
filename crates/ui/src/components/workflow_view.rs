@@ -5,6 +5,7 @@ use fridi_core::session::Session;
 
 use crate::components::step_card::StepCard;
 use crate::components::terminal_view::TerminalView;
+use crate::engine_bridge::LiveWorkflowState;
 
 /// Information about the currently selected step, used by the terminal view.
 struct SelectedStepInfo {
@@ -15,7 +16,7 @@ struct SelectedStepInfo {
 }
 
 #[component]
-pub(crate) fn WorkflowView(session: Session) -> Element {
+pub(crate) fn WorkflowView(session: Session, live_state: Option<LiveWorkflowState>) -> Element {
     let mut selected_step = use_signal(|| Option::<String>::None);
 
     let workflow =
@@ -40,20 +41,21 @@ pub(crate) fn WorkflowView(session: Session) -> Element {
     let selected_info: Option<SelectedStepInfo> = {
         let sel = selected_step.read();
         sel.as_ref().map(|name| {
+            let live_status = live_state
+                .as_ref()
+                .and_then(|ls| ls.step_statuses.get(name).cloned());
+
             let step_state = session
                 .steps
                 .values()
                 .filter(|ss| ss.step_name == *name)
                 .max_by_key(|ss| ss.attempt);
-            let (attempt, status_label, output) = match step_state {
-                Some(ss) => {
-                    let label = match &ss.status {
-                        StepStatus::Pending => "Pending".to_string(),
-                        StepStatus::Running => "Running".to_string(),
-                        StepStatus::Completed => "Completed".to_string(),
-                        StepStatus::Failed(reason) => format!("Failed: {reason}"),
-                        StepStatus::Skipped => "Skipped".to_string(),
-                    };
+
+            let effective_status = live_status.or_else(|| step_state.map(|ss| ss.status.clone()));
+
+            let (attempt, status_label, output) = match (&effective_status, step_state) {
+                (Some(status), Some(ss)) => {
+                    let label = format_status(status);
                     let output = ss
                         .output_summary
                         .as_ref()
@@ -61,7 +63,8 @@ pub(crate) fn WorkflowView(session: Session) -> Element {
                         .unwrap_or_default();
                     (ss.attempt, label, output)
                 }
-                None => (1, "Pending".to_string(), String::new()),
+                (Some(status), None) => (1, format_status(status), String::new()),
+                _ => (1, "Pending".to_string(), String::new()),
             };
             SelectedStepInfo {
                 name: name.clone(),
@@ -98,10 +101,15 @@ pub(crate) fn WorkflowView(session: Session) -> Element {
                 div { class: "steps-list",
                     for step in &steps {
                         {
-                            let status = session.steps.values()
-                                .filter(|ss| ss.step_name == step.name)
-                                .max_by_key(|ss| ss.attempt)
-                                .map(|ss| ss.status.clone());
+                            let status = live_state
+                                .as_ref()
+                                .and_then(|ls| ls.step_statuses.get(&step.name).cloned())
+                                .or_else(|| {
+                                    session.steps.values()
+                                        .filter(|ss| ss.step_name == step.name)
+                                        .max_by_key(|ss| ss.attempt)
+                                        .map(|ss| ss.status.clone())
+                                });
                             let is_selected = selected_step.read().as_deref() == Some(&step.name);
                             rsx! {
                                 StepCard {
@@ -137,10 +145,39 @@ pub(crate) fn WorkflowView(session: Session) -> Element {
         }
     });
 
+    let notifications: Vec<String> = live_state
+        .as_ref()
+        .map(|ls| ls.notifications.clone())
+        .unwrap_or_default();
+
     rsx! {
         crate::components::split_pane::SplitPane {
             top: dag_view,
             bottom: terminal,
+        }
+        if !notifications.is_empty() {
+            NotificationBar { notifications }
+        }
+    }
+}
+
+fn format_status(status: &StepStatus) -> String {
+    match status {
+        StepStatus::Pending => "Pending".to_string(),
+        StepStatus::Running => "Running".to_string(),
+        StepStatus::Completed => "Completed".to_string(),
+        StepStatus::Failed(reason) => format!("Failed: {reason}"),
+        StepStatus::Skipped => "Skipped".to_string(),
+    }
+}
+
+#[component]
+fn NotificationBar(notifications: Vec<String>) -> Element {
+    rsx! {
+        div { class: "notification-bar",
+            for (i, msg) in notifications.iter().enumerate() {
+                div { key: "{i}", class: "notification-item", "{msg}" }
+            }
         }
     }
 }

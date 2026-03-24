@@ -1,12 +1,15 @@
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
+use fridi_core::engine::EngineEvent;
 use fridi_core::session::{Session, SessionId, SessionStore};
 use fridi_core::window_state::WindowState;
+use tokio::sync::broadcast;
 
 use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::tab_bar::TabBar;
 use crate::components::workflow_view::WorkflowView;
+use crate::engine_bridge::use_engine_events;
 use crate::state::{self, TabInfo};
 use crate::styles;
 
@@ -65,6 +68,10 @@ pub(crate) fn App() -> Element {
     });
 
     let mut showing_creator = use_signal(|| false);
+
+    // Engine event bridge: receiver will be provided when an engine is wired up (#48)
+    let engine_rx: Signal<Option<broadcast::Receiver<EngineEvent>>> = use_signal(|| None);
+    let live_state = use_engine_events(engine_rx);
 
     // Helper to persist window state after tab changes
     let save_window_state = move |ws: &WindowState| {
@@ -209,7 +216,10 @@ pub(crate) fn App() -> Element {
             }
             div { class: "main-content",
                 if let Some(session) = active_session {
-                    WorkflowView { session }
+                    WorkflowView {
+                        session,
+                        live_state: Some(live_state.read().clone()),
+                    }
                 } else {
                     div { class: "empty-state",
                         "Click + to start a new session"

@@ -650,4 +650,27 @@ body {
     word-break: break-all;
     margin: 0;
 }
+
+.notification-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 120px;
+    overflow-y: auto;
+    background-color: #1c2128;
+    border-top: 1px solid #30363d;
+    padding: 8px 16px;
+    z-index: 100;
+}
+
+.notification-item {
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: #f0883e;
+    background-color: rgba(240, 136, 62, 0.1);
+    border-left: 3px solid #f0883e;
+    border-radius: 3px;
+}
 "#;
