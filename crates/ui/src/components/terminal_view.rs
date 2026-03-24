@@ -2,9 +2,7 @@ use base64::Engine;
 use dioxus::prelude::*;
 
 /// Encodes raw bytes as base64 for safe transport into JavaScript strings.
-fn encode_for_js(data: &[u8]) -> String {
-    base64::engine::general_purpose::STANDARD.encode(data)
-}
+fn encode_for_js(data: &[u8]) -> String { base64::engine::general_purpose::STANDARD.encode(data) }
 
 #[component]
 pub(crate) fn TerminalView(
