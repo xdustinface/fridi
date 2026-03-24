@@ -32,6 +32,10 @@ fn relative_time(iso: &str) -> String {
     let now = chrono::Utc::now();
     let delta = now.signed_duration_since(dt);
 
+    if delta.num_seconds() < 0 {
+        return "just now".into();
+    }
+
     if delta.num_days() > 0 {
         let days = delta.num_days();
         if days == 1 {
