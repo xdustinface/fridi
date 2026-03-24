@@ -87,6 +87,16 @@ pub struct StepSession {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentEntry {
+    pub id: String,
+    pub role: String,
+    pub claude_session_id: Option<String>,
+    pub status: String,
+    pub parent: Option<String>,
+    pub spawned_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     pub id: SessionId,
     pub workflow_name: String,
@@ -96,6 +106,8 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub steps: HashMap<StepSessionId, StepSession>,
+    #[serde(default)]
+    pub agents: HashMap<String, AgentEntry>,
 }
 
 impl Session {
@@ -115,7 +127,13 @@ impl Session {
             created_at: now,
             updated_at: now,
             steps: HashMap::new(),
+            agents: HashMap::new(),
         }
+    }
+
+    pub fn add_agent(&mut self, entry: AgentEntry) {
+        self.agents.insert(entry.id.clone(), entry);
+        self.updated_at = Utc::now();
     }
 
     pub fn update_step(&mut self, step_id: StepSessionId, step: StepSession) {
