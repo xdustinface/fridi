@@ -143,8 +143,7 @@ body {
 /* Main content */
 .main-content {
     flex: 1;
-    overflow-y: auto;
-    padding: 32px;
+    overflow: hidden;
 }
 
 .empty-state {
@@ -535,5 +534,120 @@ body {
     color: #555;
     text-align: center;
     padding-top: 4px;
+}
+
+/* Split pane */
+.split-pane-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    user-select: none;
+}
+
+.split-pane-top {
+    overflow-y: auto;
+    padding: 32px;
+}
+
+.split-pane-bottom {
+    overflow-y: auto;
+}
+
+.split-pane-divider {
+    height: 6px;
+    background-color: #2a2a4a;
+    cursor: row-resize;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s;
+}
+
+.split-pane-divider:hover,
+.split-pane-divider.dragging {
+    background-color: #a78bfa;
+}
+
+.split-pane-divider-handle {
+    width: 40px;
+    height: 2px;
+    background-color: #555;
+    border-radius: 1px;
+}
+
+.split-pane-divider:hover .split-pane-divider-handle,
+.split-pane-divider.dragging .split-pane-divider-handle {
+    background-color: #e0e0e0;
+}
+
+/* Selected step card */
+.step-card.selected {
+    border-color: #a78bfa;
+    box-shadow: 0 0 0 1px #a78bfa;
+}
+
+/* Terminal view */
+.terminal-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: #0d1117;
+}
+
+.terminal-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background-color: #161b22;
+    border-bottom: 1px solid #21262d;
+    flex-shrink: 0;
+}
+
+.terminal-step-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.terminal-attempt {
+    font-size: 12px;
+    color: #888;
+}
+
+.terminal-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.terminal-status-text {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.terminal-status-text.pending { color: #888; }
+.terminal-status-text.running { color: #60a5fa; }
+.terminal-status-text.completed { color: #34d399; }
+.terminal-status-text.failed { color: #f87171; }
+.terminal-status-text.skipped { color: #666; }
+
+.terminal-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+}
+
+.terminal-output-text {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Monaco, "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
 }
 "#;

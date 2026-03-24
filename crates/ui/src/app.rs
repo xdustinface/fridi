@@ -146,7 +146,7 @@ pub(crate) fn App() -> Element {
             }
             div { class: "main-content",
                 if let Some(session) = active_session {
-                    WorkflowView { session: session }
+                    WorkflowView { session }
                 } else {
                     div { class: "empty-state",
                         "Click + to start a new session"
