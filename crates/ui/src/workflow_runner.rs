@@ -7,10 +7,12 @@ use fridi_cli::spawner::OrchestratorSpawner;
 use fridi_core::dag::WorkflowDag;
 use fridi_core::engine::{Engine, EngineEvent};
 use fridi_core::orchestrator::Orchestrator;
-use fridi_core::schema::Workflow;
+use fridi_core::schema::{Step, Workflow, WorkflowConfig};
 use fridi_core::session::{Session, SessionStore};
 use tokio::sync::{Mutex, broadcast};
 use tracing::{error, info};
+
+use crate::components::session_creator::SessionSource;
 
 /// Encapsulates starting a workflow execution in a background tokio task.
 #[derive(Clone)]
@@ -85,5 +87,85 @@ impl WorkflowRunner {
         });
 
         Ok(event_rx)
+    }
+}
+
+/// Build a single-step workflow from the user's session source.
+pub(crate) fn workflow_from_source(source: &SessionSource, repo: &str) -> Workflow {
+    let default_config = || WorkflowConfig {
+        repo: Some(repo.into()),
+        ..Default::default()
+    };
+
+    match source {
+        SessionSource::Prompt { text } => Workflow {
+            name: "prompt".into(),
+            description: Some("User prompt".into()),
+            config: default_config(),
+            triggers: vec![],
+            notifications: Default::default(),
+            steps: vec![Step {
+                name: "execute".into(),
+                agent: Some("claude".into()),
+                prompt: Some(text.clone()),
+                ..default_step()
+            }],
+        },
+        SessionSource::Issue { number, title } => Workflow {
+            name: format!("issue-{number}"),
+            description: Some(format!("Issue #{number}: {title}")),
+            config: default_config(),
+            triggers: vec![],
+            notifications: Default::default(),
+            steps: vec![Step {
+                name: "work-on-issue".into(),
+                agent: Some("claude".into()),
+                prompt: Some(format!(
+                    "Work on issue #{number} in repo {repo}:\n\n\
+                     Title: {title}\n\n\
+                     Analyze the issue, plan the implementation, and execute it."
+                )),
+                ..default_step()
+            }],
+        },
+        SessionSource::PR {
+            number,
+            title,
+            head_ref,
+        } => Workflow {
+            name: format!("pr-{number}"),
+            description: Some(format!("PR #{number}: {title}")),
+            config: default_config(),
+            triggers: vec![],
+            notifications: Default::default(),
+            steps: vec![Step {
+                name: "work-on-pr".into(),
+                agent: Some("claude".into()),
+                prompt: Some(format!(
+                    "Work on PR #{number} ({title}) in repo {repo}:\n\n\
+                     Branch: {head_ref}\n\n\
+                     Review the PR, fix any issues, and ensure CI passes."
+                )),
+                ..default_step()
+            }],
+        },
+    }
+}
+
+fn default_step() -> Step {
+    Step {
+        name: String::new(),
+        agent: None,
+        skill: None,
+        args: None,
+        prompt: None,
+        depends_on: vec![],
+        condition: None,
+        for_each: None,
+        outputs: vec![],
+        on_failure: None,
+        retry: None,
+        step_type: None,
+        message: None,
     }
 }

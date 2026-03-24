@@ -19,9 +19,18 @@ enum LoadState<T: Clone + PartialEq> {
 /// Describes which source triggered session creation.
 #[derive(Clone, Debug)]
 pub(crate) enum SessionSource {
-    Issue { number: u64, title: String },
-    PR { number: u64, title: String },
-    Prompt { text: String },
+    Issue {
+        number: u64,
+        title: String,
+    },
+    PR {
+        number: u64,
+        title: String,
+        head_ref: String,
+    },
+    Prompt {
+        text: String,
+    },
 }
 
 #[component]
@@ -248,6 +257,7 @@ pub(crate) fn SessionCreator(
                                                 {
                                                     let num = pr.number;
                                                     let title = pr.title.clone();
+                                                    let head_ref = pr.head_ref_name.clone();
                                                     rsx! {
                                                         div {
                                                             key: "pr-{num}",
@@ -256,6 +266,7 @@ pub(crate) fn SessionCreator(
                                                                 on_create.call(SessionSource::PR {
                                                                     number: num,
                                                                     title: title.clone(),
+                                                                    head_ref: head_ref.clone(),
                                                                 });
                                                             },
                                                             span { class: "picker-item-number", "#{num}" }
