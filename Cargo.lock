@@ -1781,9 +1781,12 @@ dependencies = [
 name = "fridi-ui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "dioxus",
  "fridi-agent",
+ "fridi-cli",
  "fridi-core",
+ "fridi-mcp",
  "fridi-notify",
  "fridi-trigger",
  "tokio",
