@@ -81,6 +81,13 @@ pub(crate) async fn execute(
                 } => {
                     println!("[notify] {} -- {}", step_name, message);
                 }
+                EngineEvent::AgentOutput { step_name, data } => {
+                    tracing::trace!(
+                        step = %step_name,
+                        bytes = data.len(),
+                        "agent output received"
+                    );
+                }
             }
         }
     });
@@ -98,7 +105,8 @@ pub(crate) async fn execute(
         mcp_socket_path,
         session_dir,
         agent_definitions,
-    );
+    )
+    .with_event_sender(engine.event_sender());
 
     println!(
         "running workflow: {} (session: {})",

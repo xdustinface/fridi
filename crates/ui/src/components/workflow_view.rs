@@ -12,7 +12,7 @@ struct SelectedStepInfo {
     name: String,
     attempt: u32,
     status_label: String,
-    output: String,
+    output: Vec<u8>,
 }
 
 #[component]
@@ -53,18 +53,27 @@ pub(crate) fn WorkflowView(session: Session, live_state: Option<LiveWorkflowStat
 
             let effective_status = live_status.or_else(|| step_state.map(|ss| ss.status.clone()));
 
+            // Prefer live agent output when available (streaming from PTY)
+            let live_output = live_state
+                .as_ref()
+                .and_then(|ls| ls.agent_outputs.get(name).cloned());
+
             let (attempt, status_label, output) = match (&effective_status, step_state) {
                 (Some(status), Some(ss)) => {
                     let label = format_status(status);
-                    let output = ss
-                        .output_summary
-                        .as_ref()
-                        .map(|v| v.to_string())
-                        .unwrap_or_default();
+                    let output = live_output.unwrap_or_else(|| {
+                        ss.output_summary
+                            .as_ref()
+                            .map(|v| v.to_string().into_bytes())
+                            .unwrap_or_default()
+                    });
                     (ss.attempt, label, output)
                 }
-                (Some(status), None) => (1, format_status(status), String::new()),
-                _ => (1, "Pending".to_string(), String::new()),
+                (Some(status), None) => {
+                    let output = live_output.unwrap_or_default();
+                    (1, format_status(status), output)
+                }
+                _ => (1, "Pending".to_string(), Vec::new()),
             };
             SelectedStepInfo {
                 name: name.clone(),

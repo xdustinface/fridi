@@ -54,6 +54,10 @@ pub enum EngineEvent {
         step_name: String,
         message: String,
     },
+    AgentOutput {
+        step_name: String,
+        data: Vec<u8>,
+    },
 }
 
 /// Shared context that accumulates step outputs
@@ -122,6 +126,9 @@ impl Engine {
 
     /// Subscribe to engine events
     pub fn subscribe(&self) -> broadcast::Receiver<EngineEvent> { self.event_tx.subscribe() }
+
+    /// Get a clone of the event sender for forwarding events from external sources
+    pub fn event_sender(&self) -> broadcast::Sender<EngineEvent> { self.event_tx.clone() }
 
     fn emit(&self, event: EngineEvent) { let _ = self.event_tx.send(event); }
 

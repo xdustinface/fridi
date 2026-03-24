@@ -5,12 +5,17 @@ use fridi_core::engine::{EngineEvent, StepStatus};
 use fridi_core::session::SessionStatus;
 use tokio::sync::broadcast;
 
+/// Maximum bytes retained per step in the agent output buffer.
+/// Older output is discarded when this limit is exceeded.
+const MAX_OUTPUT_BYTES_PER_STEP: usize = 512 * 1024;
+
 /// Live workflow state updated by engine events
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct LiveWorkflowState {
     pub(crate) step_statuses: HashMap<String, StepStatus>,
     pub(crate) workflow_status: Option<SessionStatus>,
     pub(crate) notifications: Vec<String>,
+    pub(crate) agent_outputs: HashMap<String, Vec<u8>>,
 }
 
 /// Dioxus hook that subscribes to engine events and produces live workflow state.
@@ -49,6 +54,15 @@ pub(crate) fn use_engine_events(
                         .write()
                         .notifications
                         .push(format!("[{step_name}] {message}"));
+                }
+                EngineEvent::AgentOutput { step_name, data } => {
+                    let mut s = state.write();
+                    let buf = s.agent_outputs.entry(step_name).or_default();
+                    buf.extend_from_slice(&data);
+                    if buf.len() > MAX_OUTPUT_BYTES_PER_STEP {
+                        let drain = buf.len() - MAX_OUTPUT_BYTES_PER_STEP;
+                        buf.drain(..drain);
+                    }
                 }
             }
         }
