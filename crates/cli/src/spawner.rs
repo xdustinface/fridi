@@ -46,15 +46,6 @@ impl OrchestratorSpawner {
         self.event_tx = Some(tx);
         self
     }
-
-    fn write_mcp_config(&self, agent_id: &str) -> Result<PathBuf, String> {
-        let config = generate_mcp_config(&self.mcp_socket_path, agent_id);
-        let config_path = self.session_dir.join(format!("mcp-{}.json", agent_id));
-        std::fs::create_dir_all(&self.session_dir).map_err(|e| e.to_string())?;
-        let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
-        std::fs::write(&config_path, json).map_err(|e| e.to_string())?;
-        Ok(config_path)
-    }
 }
 
 impl AgentSpawner for OrchestratorSpawner {
@@ -74,19 +65,27 @@ impl AgentSpawner for OrchestratorSpawner {
         let definitions = self.agent_definitions.clone();
         let event_tx = self.event_tx.clone();
 
-        // Register agent and write MCP config synchronously before spawning
-        let prepare_result: Result<(String, PathBuf), String> = (|| {
-            let mut orch = self.orchestrator.blocking_lock();
-            let agent_id = orch
-                .spawn_agent(&agent_type, serde_json::json!({"step": &step_name}), None)
-                .map_err(|e| e.to_string())?;
-
-            let mcp_config_path = self.write_mcp_config(&agent_id)?;
-            Ok((agent_id, mcp_config_path))
-        })();
+        let session_dir = self.session_dir.clone();
 
         Box::pin(async move {
-            let (_agent_id, mcp_config_path) = prepare_result?;
+            let agent_id = {
+                let mut orch = orchestrator.lock().await;
+                orch.spawn_agent(&agent_type, serde_json::json!({"step": &step_name}), None)
+                    .map_err(|e| e.to_string())?
+            };
+
+            let mcp_config_path = {
+                let config = generate_mcp_config(&mcp_socket_path, &agent_id);
+                let config_path = session_dir.join(format!("mcp-{}.json", agent_id));
+                tokio::fs::create_dir_all(&session_dir)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+                tokio::fs::write(&config_path, json)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                config_path
+            };
 
             let orch = orchestrator.lock().await;
             let repo = orch.repo().to_string();
