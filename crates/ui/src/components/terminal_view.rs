@@ -87,6 +87,10 @@ pub(crate) fn TerminalView(
                         allowTransparency: true,
                     }});
                     term.open(el);
+                    let fitAddon = new FitAddon.FitAddon();
+                    term.loadAddon(fitAddon);
+                    fitAddon.fit();
+                    new ResizeObserver(() => fitAddon.fit()).observe(el);
                     window.fridiTerminals['{tid}'] = term;
                 }})();
                 "#,
