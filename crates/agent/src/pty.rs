@@ -18,6 +18,13 @@ pub struct PtyProcess {
 }
 
 impl PtyProcess {
+    /// Async-safe wrapper that runs the blocking PTY spawn on a dedicated thread.
+    pub async fn spawn_async(cmd: CommandBuilder) -> Result<Self, AgentError> {
+        tokio::task::spawn_blocking(move || Self::spawn(cmd))
+            .await
+            .map_err(|e| AgentError::SpawnError(format!("spawn task failed: {e}")))?
+    }
+
     pub fn spawn(cmd: CommandBuilder) -> Result<Self, AgentError> {
         let pty_system = NativePtySystem::default();
         let pair = pty_system
@@ -99,9 +106,14 @@ impl PtyProcess {
     }
 
     pub async fn wait(&mut self) -> Result<i32, AgentError> {
-        let mut child = self.child.lock().await;
-        let status = tokio::task::block_in_place(|| child.wait())
-            .map_err(|e| AgentError::ExecutionError(format!("failed to wait: {e}")))?;
+        let child = self.child.clone();
+        let status = tokio::task::spawn_blocking(move || {
+            let mut child = child.blocking_lock();
+            child.wait()
+        })
+        .await
+        .map_err(|e| AgentError::ExecutionError(format!("wait task failed: {e}")))?
+        .map_err(|e| AgentError::ExecutionError(format!("failed to wait: {e}")))?;
 
         self.running.store(false, Ordering::Relaxed);
 

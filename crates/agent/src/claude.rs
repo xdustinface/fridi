@@ -106,7 +106,7 @@ impl Agent for ClaudeAgent {
 
         info!("spawning Claude CLI: {:?}", cmd);
 
-        let pty = PtyProcess::spawn(cmd)?;
+        let pty = PtyProcess::spawn_async(cmd).await?;
         Ok(Box::new(ClaudeAgentHandle { pty, session_id }))
     }
 }
