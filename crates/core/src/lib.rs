@@ -2,6 +2,7 @@ pub mod dag;
 pub mod engine;
 pub mod github;
 pub mod orchestrator;
+pub mod project_overview;
 pub mod schema;
 pub mod session;
 pub mod window_state;
