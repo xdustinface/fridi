@@ -3,12 +3,12 @@ use std::sync::Arc;
 
 use fridi_agent::claude::{ClaudeAgent, ClaudeAgentConfig};
 use fridi_agent::definition::{AgentDefinition, TemplateContext, interpolate_prompt};
-use fridi_agent::traits::{Agent, AgentConfig};
-use fridi_core::engine::{AgentSpawner, StepResult, WorkflowContext};
+use fridi_agent::traits::{Agent, AgentConfig, AgentOutput};
+use fridi_core::engine::{AgentSpawner, EngineEvent, StepResult, WorkflowContext};
 use fridi_core::orchestrator::Orchestrator;
 use fridi_core::schema::Step;
 use fridi_mcp::config::generate_mcp_config;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, broadcast};
 
 /// Bridges the engine's `AgentSpawner` trait with the orchestrator and Claude agent.
 ///
@@ -20,6 +20,7 @@ pub(crate) struct OrchestratorSpawner {
     mcp_socket_path: String,
     session_dir: PathBuf,
     agent_definitions: Vec<AgentDefinition>,
+    event_tx: Option<broadcast::Sender<EngineEvent>>,
 }
 
 impl OrchestratorSpawner {
@@ -36,7 +37,13 @@ impl OrchestratorSpawner {
             mcp_socket_path,
             session_dir,
             agent_definitions,
+            event_tx: None,
         }
+    }
+
+    pub(crate) fn with_event_sender(mut self, tx: broadcast::Sender<EngineEvent>) -> Self {
+        self.event_tx = Some(tx);
+        self
     }
 
     fn write_mcp_config(&self, agent_id: &str) -> Result<PathBuf, String> {
@@ -64,6 +71,7 @@ impl AgentSpawner for OrchestratorSpawner {
         let agent_config = self.agent_config.clone();
         let mcp_socket_path = self.mcp_socket_path.clone();
         let definitions = self.agent_definitions.clone();
+        let event_tx = self.event_tx.clone();
 
         // Register agent and write MCP config synchronously before spawning
         let prepare_result: Result<(String, PathBuf), String> = (|| {
@@ -122,7 +130,29 @@ impl AgentSpawner for OrchestratorSpawner {
             let agent = ClaudeAgent::new(agent_config);
             let mut handle = agent.spawn(config).await.map_err(|e| e.to_string())?;
 
+            // Forward PTY output to engine events if a sender is available
+            let forwarder = event_tx.map(|tx| {
+                let mut rx = handle.subscribe();
+                let name = step_name.clone();
+                tokio::spawn(async move {
+                    while let Ok(output) = rx.recv().await {
+                        if let AgentOutput::Stdout(data) = output {
+                            let _ = tx.send(EngineEvent::AgentOutput {
+                                step_name: name.clone(),
+                                data,
+                            });
+                        }
+                    }
+                })
+            });
+
             let exit_code = handle.wait().await.map_err(|e| e.to_string())?;
+
+            // Wait for the forwarder to finish draining
+            if let Some(handle) = forwarder {
+                let _ = handle.await;
+            }
+
             let output = handle.collected_output();
 
             let structured_output = serde_json::from_str(&output).ok();

@@ -11,6 +11,7 @@ pub(crate) struct LiveWorkflowState {
     pub(crate) step_statuses: HashMap<String, StepStatus>,
     pub(crate) workflow_status: Option<SessionStatus>,
     pub(crate) notifications: Vec<String>,
+    pub(crate) agent_outputs: HashMap<String, Vec<u8>>,
 }
 
 /// Dioxus hook that subscribes to engine events and produces live workflow state.
@@ -49,6 +50,14 @@ pub(crate) fn use_engine_events(
                         .write()
                         .notifications
                         .push(format!("[{step_name}] {message}"));
+                }
+                EngineEvent::AgentOutput { step_name, data } => {
+                    state
+                        .write()
+                        .agent_outputs
+                        .entry(step_name)
+                        .or_default()
+                        .extend_from_slice(&data);
                 }
             }
         }

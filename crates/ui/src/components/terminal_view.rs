@@ -5,7 +5,7 @@ pub(crate) fn TerminalView(
     step_name: String,
     attempt: u32,
     status: String,
-    output: String,
+    output: Vec<u8>,
 ) -> Element {
     let status_class = match status.as_str() {
         "Running" => "running",
@@ -15,6 +15,8 @@ pub(crate) fn TerminalView(
         s if s.starts_with("Failed") => "failed",
         _ => "pending",
     };
+
+    let display_text = String::from_utf8_lossy(&output);
 
     rsx! {
         div { class: "terminal-view",
@@ -28,10 +30,10 @@ pub(crate) fn TerminalView(
             }
             div { class: "terminal-output",
                 pre { class: "terminal-output-text",
-                    if output.is_empty() {
+                    if display_text.is_empty() {
                         "No output yet."
                     } else {
-                        "{output}"
+                        "{display_text}"
                     }
                 }
             }
