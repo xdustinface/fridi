@@ -45,7 +45,7 @@ pub(crate) fn WorkflowView(session: Session) -> Element {
                 .values()
                 .filter(|ss| ss.step_name == *name)
                 .max_by_key(|ss| ss.attempt);
-            let (attempt, status_label) = match step_state {
+            let (attempt, status_label, output) = match step_state {
                 Some(ss) => {
                     let label = match &ss.status {
                         StepStatus::Pending => "Pending".to_string(),
@@ -54,15 +54,20 @@ pub(crate) fn WorkflowView(session: Session) -> Element {
                         StepStatus::Failed(reason) => format!("Failed: {reason}"),
                         StepStatus::Skipped => "Skipped".to_string(),
                     };
-                    (ss.attempt, label)
+                    let output = ss
+                        .output_summary
+                        .as_ref()
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
+                    (ss.attempt, label, output)
                 }
-                None => (1, "Pending".to_string()),
+                None => (1, "Pending".to_string(), String::new()),
             };
             SelectedStepInfo {
                 name: name.clone(),
                 attempt,
                 status_label,
-                output: String::new(),
+                output,
             }
         })
     };

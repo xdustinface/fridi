@@ -10,9 +10,9 @@ pub(crate) fn TerminalView(
     let status_class = match status.as_str() {
         "Running" => "running",
         "Completed" => "completed",
-        "Failed" => "failed",
         "Pending" => "pending",
         "Skipped" => "skipped",
+        s if s.starts_with("Failed") => "failed",
         _ => "pending",
     };
 
