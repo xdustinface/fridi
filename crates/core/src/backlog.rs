@@ -108,11 +108,13 @@ impl Backlog {
         let (priority, rest) = parse_priority(text);
         let tags = extract_tags(rest);
 
+        let sanitized_context = context.map(|s| sanitize_metadata_field(s));
+
         self.items.push(BacklogItem {
             text: rest.to_owned(),
             tags,
             priority,
-            context: context.map(|s| s.to_owned()),
+            context: sanitized_context,
             created_at: Utc::now(),
             completed: false,
         });
@@ -171,6 +173,13 @@ fn extract_tags(text: &str) -> Vec<String> {
 }
 
 fn is_tag_char(b: u8) -> bool { b.is_ascii_alphanumeric() || b == b'_' || b == b'-' }
+
+/// Sanitize a metadata field value for safe embedding in HTML comments.
+/// Replaces spaces with hyphens (to avoid breaking `rfind(' ')` parsing)
+/// and strips HTML comment markers to prevent injection.
+fn sanitize_metadata_field(s: &str) -> String {
+    s.replace(' ', "-").replace("<!--", "").replace("-->", "")
+}
 
 /// Parse leading `!!` or `!` priority prefix and return the remaining text.
 fn parse_priority(text: &str) -> (Priority, &str) {
