@@ -411,12 +411,23 @@ mod tests {
         assert!(config.description.is_empty());
         assert!(config.permissions.is_none());
         assert!(config.allowed_tools.is_empty());
+        assert!(config.spawnable_roles.is_empty());
+        assert!(config.default_args.is_empty());
 
         // Subsequent spawns of the same unknown role should reuse the config
         let agent_id2 = orch
             .spawn_agent("claude", serde_json::json!({}), None)
             .unwrap();
         assert_eq!(agent_id2, "claude-2");
+
+        // Only one config entry should exist for the role
+        assert_eq!(
+            orch.role_configs()
+                .iter()
+                .filter(|c| c.name == "claude")
+                .count(),
+            1
+        );
 
         // A different unknown role also gets a default
         let agent_id3 = orch
