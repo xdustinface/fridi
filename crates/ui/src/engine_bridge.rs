@@ -29,58 +29,55 @@ pub(crate) fn use_engine_events(
     let mut state = use_signal(LiveWorkflowState::default);
 
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        // Wait for the receiver to become available. The signal starts as
-        // None and is set to Some(rx) once the engine is created but before
-        // execution begins, so no events are lost.
-        let mut receiver = {
-            let mut attempts = 0;
-            loop {
+        loop {
+            // Wait indefinitely for a receiver to become available. The signal
+            // starts as None and is set to Some(rx) when a session is created.
+            let receiver = loop {
                 if let Some(r) = rx.write().take() {
                     break r;
                 }
-                attempts += 1;
-                if attempts > 200 {
-                    // 200 * 50ms = 10s
-                    tracing::warn!("engine event receiver never became available");
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
-        };
-        while let Ok(event) = receiver.recv().await {
-            match event {
-                EngineEvent::StepStatusChanged { step_name, status } => {
-                    state.write().step_statuses.insert(step_name, status);
-                }
-                EngineEvent::WorkflowStarted { .. } => {
-                    let mut s = state.write();
-                    s.workflow_status = Some(SessionStatus::Running);
-                    s.step_statuses.clear();
-                }
-                EngineEvent::WorkflowCompleted { .. } => {
-                    state.write().workflow_status = Some(SessionStatus::Completed);
-                }
-                EngineEvent::WorkflowFailed { reason, .. } => {
-                    let mut s = state.write();
-                    s.workflow_status = Some(SessionStatus::Failed);
-                    s.notifications.push(format!("Failed: {reason}"));
-                }
-                EngineEvent::NotificationRequired { step_name, message } => {
-                    state
-                        .write()
-                        .notifications
-                        .push(format!("[{step_name}] {message}"));
-                }
-                EngineEvent::AgentOutput { step_name, data } => {
-                    let mut s = state.write();
-                    let buf = s.agent_outputs.entry(step_name).or_default();
-                    buf.extend_from_slice(&data);
-                    if buf.len() > MAX_OUTPUT_BYTES_PER_STEP {
-                        let drain = buf.len() - MAX_OUTPUT_BYTES_PER_STEP;
-                        buf.drain(..drain);
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            };
+
+            // Process events until the broadcast channel closes
+            let mut receiver = receiver;
+            while let Ok(event) = receiver.recv().await {
+                match event {
+                    EngineEvent::StepStatusChanged { step_name, status } => {
+                        state.write().step_statuses.insert(step_name, status);
+                    }
+                    EngineEvent::WorkflowStarted { .. } => {
+                        let mut s = state.write();
+                        s.workflow_status = Some(SessionStatus::Running);
+                        s.step_statuses.clear();
+                    }
+                    EngineEvent::WorkflowCompleted { .. } => {
+                        state.write().workflow_status = Some(SessionStatus::Completed);
+                    }
+                    EngineEvent::WorkflowFailed { reason, .. } => {
+                        let mut s = state.write();
+                        s.workflow_status = Some(SessionStatus::Failed);
+                        s.notifications.push(format!("Failed: {reason}"));
+                    }
+                    EngineEvent::NotificationRequired { step_name, message } => {
+                        state
+                            .write()
+                            .notifications
+                            .push(format!("[{step_name}] {message}"));
+                    }
+                    EngineEvent::AgentOutput { step_name, data } => {
+                        let mut s = state.write();
+                        let buf = s.agent_outputs.entry(step_name).or_default();
+                        buf.extend_from_slice(&data);
+                        if buf.len() > MAX_OUTPUT_BYTES_PER_STEP {
+                            let drain = buf.len() - MAX_OUTPUT_BYTES_PER_STEP;
+                            buf.drain(..drain);
+                        }
                     }
                 }
             }
+
+            // Channel closed (workflow finished) — loop back to wait for next session
         }
     });
 
