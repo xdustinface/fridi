@@ -200,10 +200,31 @@ pub(crate) fn App() -> Element {
 
             let workflow = crate::workflow_runner::workflow_from_source(&source, &repo_str);
 
+            // Serialize the in-memory workflow to a YAML file so WorkflowView can read it
+            let session_dir = PathBuf::from(SESSIONS_DIR).join(session_id.as_str());
+            if let Err(e) = std::fs::create_dir_all(&session_dir) {
+                eprintln!("failed to create session dir: {e}");
+                return;
+            }
+            let workflow_path = session_dir.join("workflow.yaml");
+            let workflow_yaml = match serde_yaml::to_string(&workflow) {
+                Ok(y) => y,
+                Err(e) => {
+                    eprintln!("failed to serialize workflow: {e}");
+                    return;
+                }
+            };
+            if let Err(e) = std::fs::write(&workflow_path, &workflow_yaml) {
+                eprintln!("failed to write workflow file: {e}");
+                return;
+            }
+
+            let workflow_file = workflow_path.to_string_lossy().into_owned();
+
             let session = Session::new(
                 session_id.clone(),
                 context_label.clone(),
-                String::new(),
+                workflow_file,
                 repo,
             );
 
