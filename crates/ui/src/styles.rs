@@ -690,20 +690,19 @@ body {
 .terminal-status-text.failed { color: var(--status-error); }
 .terminal-status-text.skipped { color: var(--status-pending); }
 
-.terminal-output {
+.terminal-xterm-container {
     flex: 1;
-    overflow-y: auto;
-    padding: var(--space-3) var(--space-4);
+    overflow: hidden;
+    padding: var(--space-2);
+    background-color: var(--surface-0);
 }
 
-.terminal-output-text {
-    font-family: var(--font-mono);
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--text-primary);
-    white-space: pre-wrap;
-    word-break: break-all;
-    margin: 0;
+.terminal-xterm-container .xterm {
+    height: 100%;
+}
+
+.terminal-xterm-container .xterm-viewport {
+    overflow-y: auto !important;
 }
 
 .notification-bar {

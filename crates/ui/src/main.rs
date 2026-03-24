@@ -14,7 +14,13 @@ fn main() {
         .with_cfg(
             dioxus::desktop::Config::new()
                 .with_window(dioxus::desktop::WindowBuilder::new().with_title("fridi"))
-                .with_custom_head(format!("<style>{}</style>", styles::APP_CSS)),
+                .with_custom_head(format!(
+                    r#"<style>{css}</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css" />
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.js"></script>
+<script>window.fridiTerminals = {{}};</script>"#,
+                    css = styles::APP_CSS,
+                )),
         )
         .with_context(app::DetectedRepo(repo))
         .launch(app::App);
