@@ -279,6 +279,7 @@ pub(crate) fn App() -> Element {
                     HomeDashboard {
                         repo: default_repo.clone(),
                         on_pick_issue,
+                        // TODO: wire to a dedicated PR picker once available
                         on_show_pr_picker: on_new_tab,
                         on_show_creator: on_new_tab,
                     }
