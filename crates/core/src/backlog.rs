@@ -37,11 +37,7 @@ impl BacklogItem {
     fn to_line(&self) -> String {
         let checkbox = if self.completed { "- [x] " } else { "- [ ] " };
 
-        let priority_prefix = match self.priority {
-            Priority::Urgent => "!!",
-            Priority::Important => "!",
-            Priority::Normal => "",
-        };
+        let priority_prefix = self.priority.to_string();
 
         // Rebuild inline text with tags already embedded
         let text_with_tags = &self.text;
