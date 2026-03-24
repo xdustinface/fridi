@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
+use strip_ansi_escapes::strip as strip_ansi;
 use tokio::sync::{Mutex, broadcast};
 use tracing::{debug, error};
 
@@ -70,7 +71,7 @@ impl PtyProcess {
                         break;
                     }
                     Ok(n) => {
-                        let data = buf[..n].to_vec();
+                        let data = strip_ansi(&buf[..n]);
                         if let Ok(mut collected) = collected.try_lock() {
                             collected.extend_from_slice(&data);
                         }
