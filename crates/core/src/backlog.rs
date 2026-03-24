@@ -108,7 +108,7 @@ impl Backlog {
         let (priority, rest) = parse_priority(text);
         let tags = extract_tags(rest);
 
-        let sanitized_context = context.map(|s| sanitize_metadata_field(s));
+        let sanitized_context = context.map(sanitize_metadata_field);
 
         self.items.push(BacklogItem {
             text: rest.to_owned(),
