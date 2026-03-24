@@ -87,21 +87,16 @@ pub enum GitHubError {
 
 /// Detect the GitHub `owner/repo` from the current directory's git remote.
 pub fn detect_repo() -> Option<String> {
-    let output = Command::new("git")
-        .args(["remote", "get-url", "origin"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    parse_repo_from_url(&url)
+    let cwd = std::env::current_dir().ok()?;
+    detect_repo_in(&cwd)
 }
 
 /// Detect the GitHub `owner/repo` from a specific directory's git remote.
 pub fn detect_repo_in(dir: &std::path::Path) -> Option<String> {
     let output = Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "remote", "get-url", "origin"])
+        .arg("-C")
+        .arg(dir)
+        .args(["remote", "get-url", "origin"])
         .output()
         .ok()?;
     if !output.status.success() {
