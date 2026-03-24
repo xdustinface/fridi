@@ -273,3 +273,61 @@ fn DashboardSection(title: String, empty_msg: String, count: usize, children: El
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relative_time_invalid_input() {
+        assert_eq!(relative_time("not-a-date"), "not-a-date");
+    }
+
+    #[test]
+    fn relative_time_days_ago() {
+        let two_days_ago = (chrono::Utc::now() - chrono::Duration::days(2)).to_rfc3339();
+        assert_eq!(relative_time(&two_days_ago), "2d ago");
+    }
+
+    #[test]
+    fn relative_time_one_day_ago() {
+        let one_day_ago = (chrono::Utc::now() - chrono::Duration::days(1)).to_rfc3339();
+        assert_eq!(relative_time(&one_day_ago), "1d ago");
+    }
+
+    #[test]
+    fn relative_time_hours_ago() {
+        let three_hours_ago = (chrono::Utc::now() - chrono::Duration::hours(3)).to_rfc3339();
+        assert_eq!(relative_time(&three_hours_ago), "3h ago");
+    }
+
+    #[test]
+    fn relative_time_one_hour_ago() {
+        let one_hour_ago = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+        assert_eq!(relative_time(&one_hour_ago), "1h ago");
+    }
+
+    #[test]
+    fn relative_time_minutes_ago() {
+        let five_min_ago = (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339();
+        assert_eq!(relative_time(&five_min_ago), "5m ago");
+    }
+
+    #[test]
+    fn relative_time_one_minute_ago() {
+        let one_min_ago = (chrono::Utc::now() - chrono::Duration::minutes(1)).to_rfc3339();
+        assert_eq!(relative_time(&one_min_ago), "1m ago");
+    }
+
+    #[test]
+    fn relative_time_seconds_ago_shows_one_minute() {
+        let ten_sec_ago = (chrono::Utc::now() - chrono::Duration::seconds(10)).to_rfc3339();
+        assert_eq!(relative_time(&ten_sec_ago), "1m ago");
+    }
+
+    #[test]
+    fn relative_time_future_timestamp() {
+        let future = (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
+        assert_eq!(relative_time(&future), "just now");
+    }
+}
