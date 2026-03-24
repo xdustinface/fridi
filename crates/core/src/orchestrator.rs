@@ -52,8 +52,6 @@ impl AgentRoleConfig {
 
 #[derive(Debug, thiserror::Error)]
 pub enum OrchestratorError {
-    #[error("unknown agent role: {0}")]
-    UnknownRole(String),
     #[error("session store error: {0}")]
     Store(#[from] SessionStoreError),
     #[error("agent role config error: {0}")]
