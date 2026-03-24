@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use dioxus::prelude::*;
 use fridi_core::engine::{EngineEvent, StepStatus};
@@ -28,8 +29,23 @@ pub(crate) fn use_engine_events(
     let mut state = use_signal(LiveWorkflowState::default);
 
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let Some(mut receiver) = rx.write().take() else {
-            return;
+        // Wait for the receiver to become available. The signal starts as
+        // None and is set to Some(rx) once the engine is created but before
+        // execution begins, so no events are lost.
+        let mut receiver = {
+            let mut attempts = 0;
+            loop {
+                if let Some(r) = rx.write().take() {
+                    break r;
+                }
+                attempts += 1;
+                if attempts > 200 {
+                    // 200 * 50ms = 10s
+                    tracing::warn!("engine event receiver never became available");
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
         };
         while let Ok(event) = receiver.recv().await {
             match event {
