@@ -47,8 +47,22 @@ pub fn detect_repo() -> Option<String> {
 }
 
 fn parse_repo_from_url(url: &str) -> Option<String> {
-    // SSH: git@github.com:owner/repo.git (or custom aliases like git@github-dust:owner/repo)
-    if url.contains('@') {
+    // ssh:// scheme: ssh://git@github.com/owner/repo.git
+    if url.starts_with("ssh://") {
+        let parts: Vec<&str> = url.trim_end_matches(".git").split('/').collect();
+        // ssh://git@host/owner/repo => ["ssh:", "", "git@host", "owner", "repo"]
+        if parts.len() >= 5 {
+            let owner = parts[parts.len() - 2];
+            let repo = parts[parts.len() - 1];
+            if !owner.is_empty() && !repo.is_empty() {
+                return Some(format!("{owner}/{repo}"));
+            }
+        }
+        return None;
+    }
+    // SCP-style SSH: git@github.com:owner/repo.git
+    // Only match if there is no "://" (which would indicate a scheme-based URL)
+    if url.contains('@') && !url.contains("://") {
         if let Some(colon_pos) = url.rfind(':') {
             let path = &url[colon_pos + 1..];
             let cleaned = path.trim_end_matches(".git");
@@ -58,12 +72,15 @@ fn parse_repo_from_url(url: &str) -> Option<String> {
         }
     }
     // HTTPS: https://github.com/owner/repo.git
-    if url.starts_with("http") {
+    if url.starts_with("http://") || url.starts_with("https://") {
         let parts: Vec<&str> = url.trim_end_matches(".git").split('/').collect();
-        if parts.len() >= 2 {
-            let repo = parts[parts.len() - 1];
+        // https://github.com/owner/repo => ["https:", "", "github.com", "owner", "repo"]
+        if parts.len() >= 5 {
             let owner = parts[parts.len() - 2];
-            return Some(format!("{owner}/{repo}"));
+            let repo = parts[parts.len() - 1];
+            if !owner.is_empty() && !repo.is_empty() {
+                return Some(format!("{owner}/{repo}"));
+            }
         }
     }
     None
@@ -184,6 +201,37 @@ mod tests {
             parse_repo_from_url("https://github.com/owner/repo"),
             Some("owner/repo".to_string())
         );
+    }
+
+    #[test]
+    fn test_parse_repo_from_ssh_scheme_url() {
+        assert_eq!(
+            parse_repo_from_url("ssh://git@github.com/owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_from_ssh_scheme_no_suffix() {
+        assert_eq!(
+            parse_repo_from_url("ssh://git@github.com/owner/repo"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_from_https_with_credentials() {
+        assert_eq!(
+            parse_repo_from_url("https://user@github.com/owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_repo_rejects_malformed_https() {
+        // Too few path segments
+        assert_eq!(parse_repo_from_url("https://github.com"), None);
+        assert_eq!(parse_repo_from_url("https://github.com/owner"), None);
     }
 
     #[test]

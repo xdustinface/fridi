@@ -2,8 +2,7 @@ use std::path::PathBuf;
 
 use dioxus::prelude::*;
 use fridi_core::engine::EngineEvent;
-use fridi_core::github;
-use fridi_core::schema::interpolate_env;
+use fridi_core::schema::interpolate_with_repo;
 use fridi_core::session::{Session, SessionId, SessionStore};
 use fridi_core::window_state::WindowState;
 use tokio::sync::broadcast;
@@ -20,6 +19,10 @@ const SESSIONS_DIR: &str = ".fridi/sessions";
 const AGENTS_DIR: &str = "agents";
 const STATE_FILE: &str = ".fridi/fridi-state.json";
 
+/// Repo detected at startup, provided via Dioxus context.
+#[derive(Clone)]
+pub(crate) struct DetectedRepo(pub(crate) Option<String>);
+
 #[component]
 pub(crate) fn App() -> Element {
     let workflows_dir = PathBuf::from("./workflows");
@@ -28,18 +31,21 @@ pub(crate) fn App() -> Element {
     let store = use_signal(|| SessionStore::new(SESSIONS_DIR));
     let state_path = use_signal(|| PathBuf::from(STATE_FILE));
 
-    // Auto-detect repo from git remote, falling back to workflow config
-    let detected_repo = github::detect_repo();
-    if let Some(ref repo) = detected_repo {
-        std::env::set_var("FRIDI_REPO", repo);
-    }
+    // Retrieve the repo detected once at startup
+    let detected_repo = use_context::<DetectedRepo>().0;
 
     let default_repo: Option<String> = detected_repo
         .or_else(|| {
+            let repo_val = "";
             workflows
                 .read()
                 .iter()
-                .find_map(|(wf, _)| wf.config.repo.as_ref().map(|r| interpolate_env(r)))
+                .find_map(|(wf, _)| {
+                    wf.config
+                        .repo
+                        .as_ref()
+                        .map(|r| interpolate_with_repo(r, repo_val))
+                })
                 .filter(|r| !r.is_empty())
         })
         .filter(|r| !r.is_empty());

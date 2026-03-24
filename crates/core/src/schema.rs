@@ -158,7 +158,7 @@ impl Workflow {
     }
 }
 
-/// Interpolate `${ENV_VAR}` patterns with environment variable values
+/// Interpolate `${ENV_VAR}` patterns with environment variable values.
 pub fn interpolate_env(input: &str) -> String {
     let mut result = input.to_string();
     while let Some(start) = result.find("${") {
@@ -176,6 +176,13 @@ pub fn interpolate_env(input: &str) -> String {
         }
     }
     result
+}
+
+/// Replace `${FRIDI_REPO}` with the provided repo value.
+/// Other `${VAR}` patterns are resolved from the environment.
+pub fn interpolate_with_repo(input: &str, repo: &str) -> String {
+    let replaced = input.replace("${FRIDI_REPO}", repo);
+    interpolate_env(&replaced)
 }
 
 #[cfg(test)]
