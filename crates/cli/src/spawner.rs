@@ -77,9 +77,13 @@ impl AgentSpawner for OrchestratorSpawner {
             let mcp_config_path = {
                 let config = generate_mcp_config(&mcp_socket_path, &agent_id);
                 let config_path = session_dir.join(format!("mcp-{}.json", agent_id));
-                std::fs::create_dir_all(&session_dir).map_err(|e| e.to_string())?;
+                tokio::fs::create_dir_all(&session_dir)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
-                std::fs::write(&config_path, json).map_err(|e| e.to_string())?;
+                tokio::fs::write(&config_path, json)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 config_path
             };
 
