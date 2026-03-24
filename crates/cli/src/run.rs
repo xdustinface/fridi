@@ -81,7 +81,13 @@ pub(crate) async fn execute(
                 } => {
                     println!("[notify] {} -- {}", step_name, message);
                 }
-                EngineEvent::AgentOutput { .. } => {}
+                EngineEvent::AgentOutput { step_name, data } => {
+                    tracing::trace!(
+                        step = %step_name,
+                        bytes = data.len(),
+                        "agent output received"
+                    );
+                }
             }
         }
     });
