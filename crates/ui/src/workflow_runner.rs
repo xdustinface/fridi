@@ -47,7 +47,10 @@ impl WorkflowRunner {
             .repo
             .clone()
             .or_else(|| session.repo.clone())
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                tracing::warn!("no repo configured in workflow or session, defaulting to empty");
+                String::new()
+            });
 
         let session_dir = self.sessions_dir.join(session.id.as_str());
         let orchestrator = Orchestrator::from_agents_dir(
