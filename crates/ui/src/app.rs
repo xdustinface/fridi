@@ -277,6 +277,7 @@ pub(crate) fn App() -> Element {
             div { class: "main-content",
                 if *is_home.read() {
                     HomeDashboard {
+                        key: "{default_repo.clone().unwrap_or_default()}",
                         repo: default_repo.clone(),
                         on_pick_issue,
                         // TODO: wire to a dedicated PR picker once available
