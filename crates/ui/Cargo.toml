@@ -11,6 +11,7 @@ fridi-mcp = { workspace = true }
 fridi-notify = { workspace = true }
 fridi-trigger = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
 dioxus = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
