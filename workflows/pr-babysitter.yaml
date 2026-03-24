@@ -1,8 +1,8 @@
 name: pr-babysitter
-description: Monitor PRs, fix issues, watch CI until green
+description: Monitor PRs for issues, review them, fix problems, watch CI until green
 
 config:
-  repo: ""
+  repo: "${FRIDI_REPO}"
 
 triggers:
   - type: cron
@@ -11,48 +11,51 @@ triggers:
 
 notifications:
   slack:
-    webhook_url: "${SLACK_WEBHOOK_URL}"
-    channel: "#dev-alerts"
+    webhook_url: "${FRIDI_SLACK_WEBHOOK_URL}"
+    channel: "${FRIDI_SLACK_CHANNEL}"
   telegram:
-    bot_token: "${TELEGRAM_BOT_TOKEN}"
-    chat_id: "${TELEGRAM_CHAT_ID}"
+    bot_token: "${FRIDI_TELEGRAM_BOT_TOKEN}"
+    chat_id: "${FRIDI_TELEGRAM_CHAT_ID}"
 
 steps:
   - name: check-prs
     agent: claude
     skill: recap
-    outputs:
-      - prs_needing_attention
+    prompt: "Check for open PRs that need attention on ${FRIDI_REPO}. List PRs with failing CI, pending reviews, or unresolved comments."
+    outputs: [prs_needing_attention]
 
   - name: review
     agent: claude
     skill: code-review
     depends_on: [check-prs]
-    condition: "steps.check-prs.outputs.prs_needing_attention > 0"
-    for_each: "steps.check-prs.outputs.prs"
+    condition: "steps.check-prs"
+    for_each: "steps.check-prs.outputs.prs_needing_attention"
+    prompt: "Review PR #{{item.number}} on ${FRIDI_REPO}"
     on_failure: notify
-    outputs:
-      - review_findings
+    outputs: [review_findings]
 
   - name: fix
     agent: claude
     skill: fixup
     depends_on: [review]
-    condition: "steps.review.outputs.review_findings.has_actionable"
+    condition: "steps.review"
     for_each: "steps.review.outputs.prs_with_findings"
+    prompt: "Fix issues found in PR #{{item.number}} on ${FRIDI_REPO}"
+    on_failure: notify
 
   - name: watch-ci
     agent: claude
     skill: watch
     depends_on: [fix]
     for_each: "steps.fix.outputs.fixed_prs"
+    prompt: "Watch CI on PR #{{item.number}} on ${FRIDI_REPO} until green"
     retry:
-      until: "output.ci_status == 'green'"
       max_attempts: 10
       interval: "5m"
+      until: "ci_status == green"
     on_failure: notify
 
   - name: notify-complete
     type: notification
     depends_on: [watch-ci]
-    message: "All PRs processed: {{steps.watch-ci.summary}}"
+    message: "PR babysitter completed. {{steps.watch-ci.summary}}"

@@ -81,50 +81,66 @@ cargo test --workspace
 cargo run -p fridi-ui
 ```
 
-## Workflow Example
+## PR Babysitter Workflow
 
-Below is a simplified workflow that monitors pull requests, reviews them, applies
-fixes, and watches CI:
+The **pr-babysitter** workflow is the flagship example. It continuously monitors
+a repository's pull requests, reviews them, applies fixes, and watches CI until
+everything is green -- or notifies you when it gets stuck.
 
-```yaml
-name: pr-babysitter
-description: Monitor PRs, fix issues, watch CI until green
+### What it does
 
-config:
-  repo: "owner/repo"
+1. **check-prs** -- scans open PRs for failing CI, pending reviews, or
+   unresolved comments.
+2. **review** -- runs a code review on each PR that needs attention, producing
+   structured findings.
+3. **fix** -- applies fixes for the issues found during review.
+4. **watch-ci** -- monitors CI on each fixed PR, retrying up to 10 times at
+   5-minute intervals until the status is green.
+5. **notify-complete** -- sends a summary notification when the run finishes.
 
-triggers:
-  - type: cron
-    schedule: "*/30 * * * *"
-  - type: manual
+### Configuration
 
-steps:
-  - name: check-prs
-    agent: claude
-    skill: recap
-    outputs: [prs_needing_attention]
+Set these environment variables before running the workflow:
 
-  - name: review
-    agent: claude
-    skill: code-review
-    depends_on: [check-prs]
-    condition: "steps.check-prs.outputs.prs_needing_attention > 0"
-    on_failure: notify
+| Variable | Required | Description |
+|---|---|---|
+| `FRIDI_REPO` | yes | GitHub repository in `owner/repo` format |
+| `FRIDI_SLACK_WEBHOOK_URL` | no | Slack incoming-webhook URL |
+| `FRIDI_SLACK_CHANNEL` | no | Slack channel (e.g. `#dev-alerts`) |
+| `FRIDI_TELEGRAM_BOT_TOKEN` | no | Telegram bot token |
+| `FRIDI_TELEGRAM_CHAT_ID` | no | Telegram chat ID |
 
-  - name: fix
-    agent: claude
-    skill: fixup
-    depends_on: [review]
+At least one notification channel (Slack or Telegram) is recommended so you
+receive alerts when a step fails or when the workflow completes.
 
-  - name: watch-ci
-    agent: claude
-    skill: watch
-    depends_on: [fix]
-    retry:
-      max_attempts: 10
-      interval: "5m"
-    on_failure: notify
+### Running the workflow
+
+**Manual run:**
+
+```sh
+export FRIDI_REPO="owner/repo"
+cargo run -p fridi-ui          # then select pr-babysitter from the workflow list
 ```
+
+**Cron (automatic):** the workflow includes a cron trigger that fires every 30
+minutes. When running fridi as a daemon, this trigger is evaluated automatically.
+
+### Example output
+
+```text
+[check-prs]      Found 2 PRs needing attention: #41, #55
+[review]         PR #41: 1 error (missing error handling in parser.rs:88)
+[review]         PR #55: clean, no findings
+[fix]            PR #41: applied fix, committed abc1234
+[watch-ci]       PR #41: CI green after 1 attempt
+[notify-complete] PR babysitter completed. 2 PRs processed, 1 fixed, all CI green.
+```
+
+### Workflow definition
+
+See [`workflows/pr-babysitter.yaml`](workflows/pr-babysitter.yaml) for the full
+YAML definition.  For details on writing custom workflows, see
+[`workflows/README.md`](workflows/README.md).
 
 ## License
 

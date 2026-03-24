@@ -283,6 +283,47 @@ steps:
             .join("workflows/pr-babysitter.yaml");
         let workflow = Workflow::from_file(&path).unwrap();
         assert_eq!(workflow.name, "pr-babysitter");
-        assert!(workflow.steps.len() >= 4);
+        assert_eq!(
+            workflow.description.as_deref(),
+            Some("Monitor PRs for issues, review them, fix problems, watch CI until green")
+        );
+
+        // Triggers: cron + manual
+        assert_eq!(workflow.triggers.len(), 2);
+        assert!(
+            matches!(&workflow.triggers[0], Trigger::Cron { schedule } if schedule == "*/30 * * * *")
+        );
+        assert!(matches!(&workflow.triggers[1], Trigger::Manual));
+
+        // Notifications configured
+        assert!(workflow.notifications.slack.is_some());
+        assert!(workflow.notifications.telegram.is_some());
+
+        // Five steps with correct names and ordering
+        assert_eq!(workflow.steps.len(), 5);
+        let names: Vec<&str> = workflow.steps.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["check-prs", "review", "fix", "watch-ci", "notify-complete"]
+        );
+
+        // check-prs has no dependencies
+        assert!(workflow.steps[0].depends_on.is_empty());
+        assert!(workflow.steps[0].prompt.is_some());
+
+        // review depends on check-prs and has a condition
+        assert_eq!(workflow.steps[1].depends_on, vec!["check-prs"]);
+        assert!(workflow.steps[1].condition.is_some());
+        assert!(workflow.steps[1].for_each.is_some());
+        assert_eq!(workflow.steps[1].on_failure, Some(OnFailure::Notify));
+
+        // watch-ci has retry config
+        let retry = workflow.steps[3].retry.as_ref().unwrap();
+        assert_eq!(retry.max_attempts, Some(10));
+        assert_eq!(retry.interval.as_deref(), Some("5m"));
+
+        // notify-complete is a notification step
+        assert_eq!(workflow.steps[4].step_type, Some(StepType::Notification));
+        assert!(workflow.steps[4].message.is_some());
     }
 }
