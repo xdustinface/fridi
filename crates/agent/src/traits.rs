@@ -23,7 +23,7 @@ pub enum AgentOutput {
     Exited(i32),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AgentConfig {
     pub agent_type: String,
     pub skill: Option<String>,
@@ -32,6 +32,12 @@ pub struct AgentConfig {
     pub working_dir: Option<String>,
     pub env: HashMap<String, String>,
     pub context: HashMap<String, JsonValue>,
+    /// Claude session UUID; generated if not provided
+    pub session_id: Option<String>,
+    /// Whether to resume an existing session instead of starting fresh
+    pub resume: bool,
+    /// Human-readable name for the session
+    pub session_name: Option<String>,
 }
 
 #[async_trait]
@@ -42,6 +48,7 @@ pub trait AgentHandle: Send + Sync {
     async fn kill(&mut self) -> Result<(), AgentError>;
     fn is_running(&self) -> bool;
     fn collected_output(&self) -> String;
+    fn session_id(&self) -> Option<&str>;
 }
 
 #[async_trait]
