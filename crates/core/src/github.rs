@@ -88,8 +88,8 @@ pub fn fetch_prs(repo: &str) -> Result<Vec<GitHubPR>, GitHubError> {
 }
 
 /// Select the highest priority open issue. Prioritizes by label name containing
-/// "priority" or "urgent", then falls back to the first issue in the list
-/// (which gh returns sorted by creation date).
+/// "priority", "urgent", or "critical", then falls back to the first issue in
+/// the list (which gh returns sorted by creation date).
 pub fn auto_pick_issue(repo: &str) -> Result<Option<GitHubIssue>, GitHubError> {
     let issues = fetch_issues(repo)?;
     if issues.is_empty() {
