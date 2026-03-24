@@ -5,7 +5,9 @@ use fridi_core::engine::EngineEvent;
 use fridi_core::schema::interpolate_with_repo;
 use fridi_core::session::{Session, SessionId, SessionStore};
 use fridi_core::window_state::WindowState;
+use serde_yaml::to_string as to_yaml;
 use tokio::sync::broadcast;
+use tracing::error;
 
 use crate::components::home_dashboard::HomeDashboard;
 use crate::components::session_creator::{SessionCreator, SessionSource};
@@ -203,19 +205,19 @@ pub(crate) fn App() -> Element {
             // Serialize the in-memory workflow to a YAML file so WorkflowView can read it
             let session_dir = PathBuf::from(SESSIONS_DIR).join(session_id.as_str());
             if let Err(e) = std::fs::create_dir_all(&session_dir) {
-                eprintln!("failed to create session dir: {e}");
+                error!("failed to create session dir: {e}");
                 return;
             }
             let workflow_path = session_dir.join("workflow.yaml");
-            let workflow_yaml = match serde_yaml::to_string(&workflow) {
+            let workflow_yaml = match to_yaml(&workflow) {
                 Ok(y) => y,
                 Err(e) => {
-                    eprintln!("failed to serialize workflow: {e}");
+                    error!("failed to serialize workflow: {e}");
                     return;
                 }
             };
             if let Err(e) = std::fs::write(&workflow_path, &workflow_yaml) {
-                eprintln!("failed to write workflow file: {e}");
+                error!("failed to write workflow file: {e}");
                 return;
             }
 
