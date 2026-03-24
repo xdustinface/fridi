@@ -1,0 +1,33 @@
+model: claude-opus-4-6
+
+auto_review: true
+auto_approve: true
+
+exclude_paths:
+  - "*.lock"
+  - "target/"
+
+max_diff_lines: 10000
+
+instructions: |
+  This is fridi -- an AI workflow orchestrator built in Rust with Dioxus for the desktop UI.
+
+  Key crates:
+  - fridi-core: workflow schema, DAG execution engine, session persistence, orchestrator
+  - fridi-agent: PTY-based agent spawning, Claude CLI integration with session IDs
+  - fridi-mcp: MCP server for inter-agent communication (message broker, tool dispatch)
+  - fridi-trigger: cron and manual workflow triggers
+  - fridi-notify: Slack/Telegram/console notifications with rate limiting
+  - fridi-cli: CLI entry point (fridi run <workflow.yaml>)
+  - fridi-ui: Dioxus desktop app with tabs, split pane, session creation
+
+  Focus on:
+  - Rust ownership and borrowing correctness
+  - Async safety (spawn_blocking for PTY operations)
+  - Error handling (no unwrap in production code)
+  - Visibility (prefer pub(crate) over pub)
+  - No inline imports -- always use top-level use statements
+
+memory:
+  enabled: true
+  repo: "xdustinface/review-memory"
