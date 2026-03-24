@@ -1,16 +1,21 @@
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
+use fridi_core::engine::EngineEvent;
 use fridi_core::session::{Session, SessionId, SessionStore};
 use fridi_core::window_state::WindowState;
+use tokio::sync::broadcast;
 
 use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::tab_bar::TabBar;
 use crate::components::workflow_view::WorkflowView;
+use crate::engine_bridge::use_engine_events;
 use crate::state::{self, TabInfo};
 use crate::styles;
+use crate::workflow_runner::WorkflowRunner;
 
 const SESSIONS_DIR: &str = ".fridi/sessions";
+const AGENTS_DIR: &str = "agents";
 const STATE_FILE: &str = ".fridi/fridi-state.json";
 
 #[component]
@@ -65,6 +70,14 @@ pub(crate) fn App() -> Element {
     });
 
     let mut showing_creator = use_signal(|| false);
+
+    // Engine event bridge: receiver is set when a workflow starts
+    let mut engine_rx: Signal<Option<broadcast::Receiver<EngineEvent>>> = use_signal(|| None);
+    let live_state = use_engine_events(engine_rx);
+
+    // Workflow runner for starting engine executions in background tasks
+    let runner =
+        use_signal(|| WorkflowRunner::new(PathBuf::from(AGENTS_DIR), PathBuf::from(SESSIONS_DIR)));
 
     // Helper to persist window state after tab changes
     let save_window_state = move |ws: &WindowState| {
@@ -168,9 +181,33 @@ pub(crate) fn App() -> Element {
             repo,
         );
 
-        if let Err(e) = store.read().save(&session) {
+        let current_store = store.read().clone();
+        if let Err(e) = current_store.save(&session) {
             eprintln!("failed to save session: {e}");
             return;
+        }
+
+        // Find the first workflow to execute
+        let workflow_opt = workflows.read().first().map(|(wf, _)| wf.clone());
+
+        // Start workflow execution in a background task
+        if let Some(workflow) = workflow_opt {
+            let runner_clone = runner.read().clone();
+            let session_clone = session.clone();
+            let store_clone = current_store;
+            spawn(async move {
+                match runner_clone
+                    .start(workflow, session_clone, store_clone)
+                    .await
+                {
+                    Ok(rx) => {
+                        engine_rx.set(Some(rx));
+                    }
+                    Err(e) => {
+                        eprintln!("failed to start workflow execution: {e}");
+                    }
+                }
+            });
         }
 
         let tab = TabInfo {
@@ -209,7 +246,10 @@ pub(crate) fn App() -> Element {
             }
             div { class: "main-content",
                 if let Some(session) = active_session {
-                    WorkflowView { session }
+                    WorkflowView {
+                        session,
+                        live_state: Some(live_state.read().clone()),
+                    }
                 } else {
                     div { class: "empty-state",
                         "Click + to start a new session"
