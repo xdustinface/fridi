@@ -1,7 +1,7 @@
-name: Claude Review
+name: Manki
 
 concurrency:
-  group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: manki-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 on:
@@ -20,7 +20,7 @@ jobs:
     if: |
       github.event_name == 'pull_request' ||
       (github.event_name == 'issue_comment' &&
-       contains(github.event.comment.body, '@claude') &&
+       contains(github.event.comment.body, '@manki') &&
        contains(github.event.comment.body, 'review') &&
        github.event.issue.pull_request)
     runs-on: ubuntu-latest
@@ -32,8 +32,8 @@ jobs:
           node-version: '20'
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
-      - name: Claude Review
-        uses: xdustinface/claude-review@v1
+      - name: Manki
+        uses: xdustinface/manki@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
