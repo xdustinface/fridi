@@ -39,9 +39,10 @@ steps:
     skill: fixup
     depends_on: [review]
     condition: "steps.review"
-    for_each: "steps.review.outputs.prs_with_findings"
+    for_each: "steps.review.outputs.review_findings"
     prompt: "Fix issues found in PR #{{item.number}} on ${FRIDI_REPO}"
     on_failure: notify
+    outputs: [fixed_prs]
 
   - name: watch-ci
     agent: claude
