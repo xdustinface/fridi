@@ -1,5 +1,6 @@
 mod app;
 mod components;
+mod engine_bridge;
 mod state;
 mod styles;
 
