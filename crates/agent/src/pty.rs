@@ -103,7 +103,7 @@ impl PtyProcess {
     /// Returns the pre-subscribed receiver that was created before the reader
     /// thread started, guaranteeing no output is missed. Returns `None` if
     /// already taken.
-    pub fn take_initial_receiver(&mut self) -> Option<broadcast::Receiver<AgentOutput>> {
+    pub(crate) fn take_initial_receiver(&mut self) -> Option<broadcast::Receiver<AgentOutput>> {
         self.initial_rx.take()
     }
 
@@ -223,9 +223,6 @@ mod tests {
         let mut cmd = CommandBuilder::new("echo");
         cmd.arg("hello late");
         let mut proc = PtyProcess::spawn(cmd).unwrap();
-
-        // Small delay to let the reader task start producing output
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
         // Use the pre-subscribed receiver instead of a late subscribe
         let mut rx = proc

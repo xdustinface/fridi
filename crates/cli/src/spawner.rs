@@ -9,11 +9,12 @@ use fridi_core::orchestrator::Orchestrator;
 use fridi_core::schema::Step;
 use fridi_mcp::config::generate_mcp_config;
 use tokio::sync::{Mutex, broadcast};
+use tracing::warn;
 
 /// Bridges the engine's `AgentSpawner` trait with the orchestrator and Claude agent.
 ///
-/// The forwarder task (lines 144-157) subscribes to the PTY broadcast channel
-/// and re-emits each `AgentOutput::Stdout` chunk as an `EngineEvent::AgentOutput`.
+/// The forwarder task subscribes to the PTY broadcast channel and re-emits each
+/// `AgentOutput::Stdout` chunk as an `EngineEvent::AgentOutput`.
 ///
 /// For each step, it registers the agent with the orchestrator, writes an MCP config
 /// file, and runs the Claude CLI session to completion.
@@ -147,9 +148,10 @@ impl AgentSpawner for OrchestratorSpawner {
             // Use the pre-subscribed receiver to avoid missing output emitted
             // between spawn and subscribe.
             let forwarder = event_tx.map(|tx| {
-                let mut rx = handle
-                    .take_initial_receiver()
-                    .unwrap_or_else(|| handle.subscribe());
+                let mut rx = handle.take_initial_receiver().unwrap_or_else(|| {
+                    warn!("initial PTY receiver already taken; falling back to subscribe (output may be lost)");
+                    handle.subscribe()
+                });
                 let name = step_name.clone();
                 tokio::spawn(async move {
                     while let Ok(output) = rx.recv().await {
@@ -189,11 +191,12 @@ mod tests {
     use fridi_core::engine::EngineEvent;
     use tokio::sync::broadcast;
 
-    /// Tests the forwarder pattern used in `spawn_step` (lines 144-157):
-    /// PTY broadcast → forwarder task → EngineEvent broadcast.
+    /// Tests the forwarder pattern used in `spawn_step`:
+    /// PTY broadcast -> forwarder task -> EngineEvent broadcast.
     ///
     /// Creates both channels manually, spawns the forwarder, and verifies
     /// that `AgentOutput::Stdout` chunks arrive as `EngineEvent::AgentOutput`.
+    /// The `take_initial_receiver` path is covered in `pty::tests`.
     #[tokio::test]
     async fn test_forwarder_relays_agent_output_to_engine_events() {
         // Simulate the PTY broadcast channel
