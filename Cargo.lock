@@ -1703,6 +1703,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fridi-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fridi-agent",
+ "fridi-core",
+ "fridi-mcp",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fridi-core"
 version = "0.1.0"
 dependencies = [
