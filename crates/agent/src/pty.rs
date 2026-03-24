@@ -71,7 +71,7 @@ impl PtyProcess {
                         break;
                     }
                     Ok(n) => {
-                        let data = strip_ansi(&buf[..n]);
+                        let data = buf[..n].to_vec();
                         if let Ok(mut collected) = collected.try_lock() {
                             collected.extend_from_slice(&data);
                         }
@@ -149,12 +149,16 @@ impl PtyProcess {
 
     pub async fn collected_output(&self) -> String {
         let collected = self.collected_output.lock().await;
-        String::from_utf8_lossy(&collected).to_string()
+        let stripped = strip_ansi(&*collected);
+        String::from_utf8_lossy(&stripped).to_string()
     }
 
     pub fn collected_output_sync(&self) -> String {
         match self.collected_output.try_lock() {
-            Ok(collected) => String::from_utf8_lossy(&collected).to_string(),
+            Ok(collected) => {
+                let stripped = strip_ansi(&*collected);
+                String::from_utf8_lossy(&stripped).to_string()
+            }
             Err(_) => String::new(),
         }
     }
