@@ -88,8 +88,8 @@ pub(crate) fn App() -> Element {
         }
     });
 
-    // Whether the home tab is currently selected
-    let mut home_active = use_signal(|| active_tab.read().is_none());
+    // Derive home state from active_tab rather than maintaining a separate signal
+    let is_home = use_memo(move || active_tab.read().is_none());
 
     let mut showing_creator = use_signal(|| false);
 
@@ -110,8 +110,7 @@ pub(crate) fn App() -> Element {
 
     // Load the full session for the active tab
     let active_session: Option<Session> = {
-        let is_home = *home_active.read();
-        if is_home {
+        if *is_home.read() {
             None
         } else {
             let tabs_read = tabs.read();
@@ -125,13 +124,11 @@ pub(crate) fn App() -> Element {
     };
 
     let on_select_home = move |()| {
-        home_active.set(true);
         active_tab.set(None);
     };
 
     let repo_for_select = default_repo.clone();
     let on_select_tab = move |idx: usize| {
-        home_active.set(false);
         active_tab.set(Some(idx));
         // Persist active tab change
         let tabs_read = tabs.read();
@@ -161,7 +158,6 @@ pub(crate) fn App() -> Element {
             drop(t);
             if len == 0 {
                 // No session tabs left, go to home
-                home_active.set(true);
                 active_tab.set(None);
             } else {
                 let current = active_tab.read().unwrap_or(0);
@@ -248,7 +244,6 @@ pub(crate) fn App() -> Element {
             let new_idx = t.len();
             t.push(tab);
             drop(t);
-            home_active.set(false);
             active_tab.set(Some(new_idx));
             showing_creator.set(false);
 
@@ -267,22 +262,20 @@ pub(crate) fn App() -> Element {
         showing_creator.set(false);
     };
 
-    let is_home = *home_active.read();
-
     rsx! {
         document::Style { {styles::APP_CSS} }
         div { class: "app-layout",
             TabBar {
                 tabs: tabs.read().clone(),
                 active: *active_tab.read(),
-                home_active: is_home,
+                home_active: *is_home.read(),
                 on_select: on_select_tab,
                 on_select_home,
                 on_close: on_close_tab,
                 on_new: on_new_tab,
             }
             div { class: "main-content",
-                if is_home {
+                if *is_home.read() {
                     HomeDashboard {
                         repo: default_repo.clone(),
                         on_pick_issue,
