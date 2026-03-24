@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
-use fridi_core::github::CiStatus;
+use fridi_core::github::{self, CiStatus};
 use fridi_core::project_overview::ProjectOverview;
 use fridi_core::session::SessionStore;
+
+use crate::components::session_creator::SessionSource;
 
 const SESSIONS_DIR: &str = ".fridi/sessions";
 const POLL_INTERVAL_SECS: u64 = 60;
@@ -12,6 +14,13 @@ const POLL_INTERVAL_SECS: u64 = 60;
 enum FetchState {
     Loading,
     Loaded(ProjectOverview),
+    Error(String),
+}
+
+#[derive(Clone, PartialEq)]
+enum PickState {
+    Idle,
+    Loading,
     Error(String),
 }
 
@@ -66,8 +75,14 @@ fn ci_badge_label(status: &CiStatus) -> &'static str {
 }
 
 #[component]
-pub(crate) fn HomeDashboard(repo: Option<String>) -> Element {
+pub(crate) fn HomeDashboard(
+    repo: Option<String>,
+    on_pick_issue: EventHandler<SessionSource>,
+    on_show_pr_picker: EventHandler<()>,
+    on_show_creator: EventHandler<()>,
+) -> Element {
     let mut state = use_signal(|| FetchState::Loading);
+    let mut pick_state = use_signal(|| PickState::Idle);
     let repo_clone = repo.clone();
 
     // Fetch on mount and poll every 60s
@@ -112,62 +127,121 @@ pub(crate) fn HomeDashboard(repo: Option<String>) -> Element {
                 div { class: "dashboard-error", "Failed to load overview: {msg}" }
             }
         },
-        FetchState::Loaded(overview) => rsx! {
-            div { class: "dashboard",
-                // PRs section
-                DashboardSection {
-                    title: "Open Pull Requests",
-                    empty_msg: "No open PRs",
-                    count: overview.open_prs.len(),
-                    children: rsx! {
-                        for pr in &overview.open_prs {
-                            div { class: "dashboard-row", key: "pr-{pr.number}",
-                                span { class: "dashboard-number", "#{pr.number}" }
-                                span { class: "dashboard-title", "{pr.title}" }
-                                span { class: "dashboard-branch", "{pr.branch}" }
-                                span { class: ci_badge_class(&pr.ci_status), "{ci_badge_label(&pr.ci_status)}" }
-                                span { class: "dashboard-time", "{relative_time(&pr.updated_at)}" }
+        FetchState::Loaded(overview) => {
+            let has_repo = repo.as_ref().is_some_and(|r| !r.is_empty());
+            let is_picking = *pick_state.read() == PickState::Loading;
+
+            rsx! {
+                div { class: "dashboard",
+                    // Quick actions strip
+                    div { class: "quick-actions",
+                        button {
+                            class: "quick-action-btn primary",
+                            disabled: !has_repo || is_picking,
+                            onclick: {
+                                let repo_str = repo.clone().unwrap_or_default();
+                                move |_| {
+                                    let r = repo_str.clone();
+                                    pick_state.set(PickState::Loading);
+                                    spawn(async move {
+                                        let result = tokio::task::spawn_blocking(move || {
+                                            github::auto_pick_issue(&r)
+                                        }).await;
+                                        match result {
+                                            Ok(Ok(Some(issue))) => {
+                                                pick_state.set(PickState::Idle);
+                                                on_pick_issue.call(SessionSource::Issue {
+                                                    number: issue.number,
+                                                    title: issue.title,
+                                                });
+                                            }
+                                            Ok(Ok(None)) => {
+                                                pick_state.set(PickState::Error("No open issues found".into()));
+                                            }
+                                            Ok(Err(e)) => {
+                                                pick_state.set(PickState::Error(e.to_string()));
+                                            }
+                                            Err(e) => {
+                                                pick_state.set(PickState::Error(e.to_string()));
+                                            }
+                                        }
+                                    });
+                                }
+                            },
+                            match &*pick_state.read() {
+                                PickState::Loading => rsx! { "Finding issue..." },
+                                PickState::Error(msg) => rsx! { span { class: "quick-action-error", "{msg}" } },
+                                PickState::Idle => rsx! { "Pick up highest priority issue" },
                             }
                         }
-                    },
-                }
+                        button {
+                            class: "quick-action-btn",
+                            disabled: !has_repo,
+                            onclick: move |_| on_show_pr_picker.call(()),
+                            "Review open PRs"
+                        }
+                        button {
+                            class: "quick-action-btn",
+                            onclick: move |_| on_show_creator.call(()),
+                            "Run workflow..."
+                        }
+                    }
 
-                // Issues section
-                DashboardSection {
-                    title: "Open Issues",
-                    empty_msg: "No open issues",
-                    count: overview.open_issues.len(),
-                    children: rsx! {
-                        for issue in &overview.open_issues {
-                            div { class: "dashboard-row", key: "issue-{issue.number}",
-                                span { class: "dashboard-number", "#{issue.number}" }
-                                span { class: "dashboard-title", "{issue.title}" }
-                                if !issue.labels.is_empty() {
-                                    span { class: "dashboard-labels",
-                                        for label in &issue.labels {
-                                            span { class: "dashboard-label", "{label}" }
+                    // PRs section
+                    DashboardSection {
+                        title: "Open Pull Requests",
+                        empty_msg: "No open PRs",
+                        count: overview.open_prs.len(),
+                        children: rsx! {
+                            for pr in &overview.open_prs {
+                                div { class: "dashboard-row", key: "pr-{pr.number}",
+                                    span { class: "dashboard-number", "#{pr.number}" }
+                                    span { class: "dashboard-title", "{pr.title}" }
+                                    span { class: "dashboard-branch", "{pr.branch}" }
+                                    span { class: ci_badge_class(&pr.ci_status), "{ci_badge_label(&pr.ci_status)}" }
+                                    span { class: "dashboard-time", "{relative_time(&pr.updated_at)}" }
+                                }
+                            }
+                        },
+                    }
+
+                    // Issues section
+                    DashboardSection {
+                        title: "Open Issues",
+                        empty_msg: "No open issues",
+                        count: overview.open_issues.len(),
+                        children: rsx! {
+                            for issue in &overview.open_issues {
+                                div { class: "dashboard-row", key: "issue-{issue.number}",
+                                    span { class: "dashboard-number", "#{issue.number}" }
+                                    span { class: "dashboard-title", "{issue.title}" }
+                                    if !issue.labels.is_empty() {
+                                        span { class: "dashboard-labels",
+                                            for label in &issue.labels {
+                                                span { class: "dashboard-label", "{label}" }
+                                            }
                                         }
                                     }
+                                    span { class: "dashboard-time", "{relative_time(&issue.updated_at)}" }
                                 }
-                                span { class: "dashboard-time", "{relative_time(&issue.updated_at)}" }
                             }
-                        }
-                    },
-                }
+                        },
+                    }
 
-                // Running sessions section
-                DashboardSection {
-                    title: "Running Sessions",
-                    empty_msg: "No running sessions",
-                    count: overview.running_sessions,
-                    children: rsx! {
-                        div { class: "dashboard-row",
-                            span { class: "dashboard-title", "{overview.running_sessions} session(s) currently running" }
-                        }
-                    },
+                    // Running sessions section
+                    DashboardSection {
+                        title: "Running Sessions",
+                        empty_msg: "No running sessions",
+                        count: overview.running_sessions,
+                        children: rsx! {
+                            div { class: "dashboard-row",
+                                span { class: "dashboard-title", "{overview.running_sessions} session(s) currently running" }
+                            }
+                        },
+                    }
                 }
             }
-        },
+        }
     }
 }
 

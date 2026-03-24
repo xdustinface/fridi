@@ -178,87 +178,90 @@ pub(crate) fn App() -> Element {
         showing_creator.set(true);
     };
 
-    let repo_for_create = default_repo.clone();
-    let on_create_session = move |source: SessionSource| {
-        let (workflow_name, context_label) = match &source {
-            SessionSource::Issue { number, title } => (
-                format!("issue-{number}"),
-                format!("Issue #{number}: {title}"),
-            ),
-            SessionSource::PR { number, title, .. } => {
-                (format!("pr-{number}"), format!("PR #{number}: {title}"))
+    let create_session = {
+        let default_repo = default_repo.clone();
+        move |source: SessionSource| {
+            let (workflow_name, context_label) = match &source {
+                SessionSource::Issue { number, title } => (
+                    format!("issue-{number}"),
+                    format!("Issue #{number}: {title}"),
+                ),
+                SessionSource::PR { number, title, .. } => {
+                    (format!("pr-{number}"), format!("PR #{number}: {title}"))
+                }
+                SessionSource::Prompt { text } => {
+                    let short = if text.len() > 40 {
+                        let truncated = text
+                            .char_indices()
+                            .nth(40)
+                            .map_or(text.as_str(), |(i, _)| &text[..i]);
+                        format!("{truncated}...")
+                    } else {
+                        text.clone()
+                    };
+                    ("prompt".to_string(), short)
+                }
+            };
+
+            let session_id = SessionId::new(&workflow_name);
+            let repo = default_repo.clone();
+            let repo_str = repo.clone().unwrap_or_default();
+
+            let workflow = crate::workflow_runner::workflow_from_source(&source, &repo_str);
+
+            let session = Session::new(
+                session_id.clone(),
+                context_label.clone(),
+                String::new(),
+                repo,
+            );
+
+            let current_store = store.read().clone();
+            if let Err(e) = current_store.save(&session) {
+                eprintln!("failed to save session: {e}");
+                return;
             }
-            SessionSource::Prompt { text } => {
-                let short = if text.len() > 40 {
-                    let truncated = text
-                        .char_indices()
-                        .nth(40)
-                        .map_or(text.as_str(), |(i, _)| &text[..i]);
-                    format!("{truncated}...")
-                } else {
-                    text.clone()
-                };
-                ("prompt".to_string(), short)
-            }
-        };
 
-        let session_id = SessionId::new(&workflow_name);
-        let repo = repo_for_create.clone();
-        let repo_str = repo.clone().unwrap_or_default();
+            let runner_clone = runner.read().clone();
+            let session_clone = session.clone();
+            let store_clone = current_store;
+            spawn(async move {
+                match runner_clone
+                    .start(workflow, session_clone, store_clone)
+                    .await
+                {
+                    Ok(rx) => {
+                        engine_rx.set(Some(rx));
+                    }
+                    Err(e) => {
+                        eprintln!("failed to start workflow execution: {e}");
+                    }
+                }
+            });
 
-        let workflow = crate::workflow_runner::workflow_from_source(&source, &repo_str);
+            let tab = TabInfo {
+                session_id: session_id.clone(),
+                workflow_name: context_label,
+                status: session.status.clone(),
+            };
+            let mut t = tabs.write();
+            let new_idx = t.len();
+            t.push(tab);
+            drop(t);
+            home_active.set(false);
+            active_tab.set(Some(new_idx));
+            showing_creator.set(false);
 
-        let session = Session::new(
-            session_id.clone(),
-            context_label.clone(),
-            String::new(),
-            repo,
-        );
-
-        let current_store = store.read().clone();
-        if let Err(e) = current_store.save(&session) {
-            eprintln!("failed to save session: {e}");
-            return;
+            let repo_key = default_repo.clone().unwrap_or_default();
+            let mut ws = window_state.write();
+            ws.update_tab(&repo_key, session_id.as_str(), true);
+            ws.set_active(&repo_key, session_id.as_str());
+            save_window_state(&ws);
         }
-
-        // Start workflow execution in a background task
-        let runner_clone = runner.read().clone();
-        let session_clone = session.clone();
-        let store_clone = current_store;
-        spawn(async move {
-            match runner_clone
-                .start(workflow, session_clone, store_clone)
-                .await
-            {
-                Ok(rx) => {
-                    engine_rx.set(Some(rx));
-                }
-                Err(e) => {
-                    eprintln!("failed to start workflow execution: {e}");
-                }
-            }
-        });
-
-        let tab = TabInfo {
-            session_id: session_id.clone(),
-            workflow_name: context_label,
-            status: session.status.clone(),
-        };
-        let mut t = tabs.write();
-        let new_idx = t.len();
-        t.push(tab);
-        drop(t);
-        home_active.set(false);
-        active_tab.set(Some(new_idx));
-        showing_creator.set(false);
-
-        // Persist new tab in window state
-        let repo_key = repo_for_create.clone().unwrap_or_default();
-        let mut ws = window_state.write();
-        ws.update_tab(&repo_key, session_id.as_str(), true);
-        ws.set_active(&repo_key, session_id.as_str());
-        save_window_state(&ws);
     };
+
+    let on_create_session = create_session.clone();
+    let on_pick_issue = create_session;
 
     let on_cancel_creator = move |()| {
         showing_creator.set(false);
@@ -280,7 +283,12 @@ pub(crate) fn App() -> Element {
             }
             div { class: "main-content",
                 if is_home {
-                    HomeDashboard { repo: default_repo.clone() }
+                    HomeDashboard {
+                        repo: default_repo.clone(),
+                        on_pick_issue,
+                        on_show_pr_picker: on_new_tab,
+                        on_show_creator: on_new_tab,
+                    }
                 } else if let Some(session) = active_session {
                     WorkflowView {
                         session,

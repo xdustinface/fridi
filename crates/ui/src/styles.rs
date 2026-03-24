@@ -892,4 +892,49 @@ body {
     font-size: 13px;
     color: var(--text-tertiary);
 }
+
+/* Quick actions strip */
+.quick-actions {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.quick-action-btn {
+    padding: var(--space-2) var(--space-4);
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color var(--transition-normal), border-color var(--transition-normal);
+}
+
+.quick-action-btn:hover:not(:disabled) {
+    background-color: var(--surface-3);
+    border-color: var(--accent);
+}
+
+.quick-action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.quick-action-btn.primary {
+    background-color: var(--accent-subtle);
+    border-color: var(--accent);
+    color: var(--accent-hover);
+}
+
+.quick-action-btn.primary:hover:not(:disabled) {
+    background-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.quick-action-error {
+    color: var(--status-error);
+    font-size: 12px;
+}
 "#;
