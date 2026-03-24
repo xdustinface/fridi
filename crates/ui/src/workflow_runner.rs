@@ -76,7 +76,8 @@ impl WorkflowRunner {
             mcp_socket_path,
             session_dir,
             agent_definitions,
-        );
+        )
+        .with_event_sender(engine.event_sender());
 
         let workflow_name = workflow.name.clone();
         tokio::spawn(async move {
