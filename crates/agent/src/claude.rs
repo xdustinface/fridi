@@ -1,3 +1,6 @@
+use std::env;
+use std::time::Duration;
+
 use async_trait::async_trait;
 use portable_pty::CommandBuilder;
 use tokio::sync::broadcast;
@@ -6,6 +9,28 @@ use uuid::Uuid;
 
 use crate::pty::PtyProcess;
 use crate::traits::{Agent, AgentConfig, AgentError, AgentHandle, AgentOutput};
+
+/// Environment variables forwarded to spawned Claude CLI processes.
+const FORWARDED_ENV_VARS: &[&str] = &[
+    "PATH",
+    "HOME",
+    "USER",
+    "SHELL",
+    "EDITOR",
+    "LANG",
+    "TERM",
+    "SSH_AUTH_SOCK",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "ANTHROPIC_API_KEY",
+    "TMPDIR",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+];
 
 /// Configuration for the Claude CLI agent
 #[derive(Debug, Clone)]
@@ -80,10 +105,7 @@ impl Agent for ClaudeAgent {
             }
         }
 
-        if let Some(prompt) = &config.prompt {
-            cmd.arg("--print");
-            cmd.arg(prompt);
-        }
+        let prompt = config.prompt.clone();
 
         if let Some(mcp_config_path) = &config.mcp_config {
             cmd.arg("--mcp-config");
@@ -92,6 +114,14 @@ impl Agent for ClaudeAgent {
 
         if let Some(dir) = &config.working_dir {
             cmd.cwd(dir);
+        }
+
+        // Start with a clean environment, only forwarding essential variables
+        cmd.env_clear();
+        for key in FORWARDED_ENV_VARS {
+            if let Ok(val) = env::var(key) {
+                cmd.env(key, val);
+            }
         }
 
         for (key, value) in &config.env {
@@ -106,7 +136,24 @@ impl Agent for ClaudeAgent {
 
         info!("spawning Claude CLI: {:?}", cmd);
 
-        let pty = PtyProcess::spawn_async(cmd).await?;
+        let mut pty = PtyProcess::spawn_async(cmd).await?;
+
+        // Send the prompt via PTY stdin instead of passing it as a CLI arg.
+        // A brief delay lets the Claude CLI finish initializing before
+        // receiving input.
+        if let Some(prompt) = prompt {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            let result = pty.write_stdin(prompt.as_bytes()).await;
+            let result = match result {
+                Ok(()) => pty.write_stdin(b"\n").await,
+                Err(e) => Err(e),
+            };
+            if let Err(e) = result {
+                let _ = pty.kill().await;
+                return Err(e);
+            }
+        }
+
         Ok(Box::new(ClaudeAgentHandle { pty, session_id }))
     }
 }

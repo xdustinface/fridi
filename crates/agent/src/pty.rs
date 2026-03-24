@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
+use strip_ansi_escapes::strip as strip_ansi;
 use tokio::sync::{Mutex, broadcast};
 use tracing::{debug, error};
 
@@ -148,12 +149,16 @@ impl PtyProcess {
 
     pub async fn collected_output(&self) -> String {
         let collected = self.collected_output.lock().await;
-        String::from_utf8_lossy(&collected).to_string()
+        let stripped = strip_ansi(&*collected);
+        String::from_utf8_lossy(&stripped).to_string()
     }
 
     pub fn collected_output_sync(&self) -> String {
         match self.collected_output.try_lock() {
-            Ok(collected) => String::from_utf8_lossy(&collected).to_string(),
+            Ok(collected) => {
+                let stripped = strip_ansi(&*collected);
+                String::from_utf8_lossy(&stripped).to_string()
+            }
             Err(_) => String::new(),
         }
     }

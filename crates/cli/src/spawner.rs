@@ -5,6 +5,7 @@ use fridi_agent::claude::{ClaudeAgent, ClaudeAgentConfig};
 use fridi_agent::definition::{AgentDefinition, TemplateContext, interpolate_prompt};
 use fridi_agent::traits::{Agent, AgentConfig, AgentOutput};
 use fridi_core::engine::{AgentSpawner, EngineEvent, StepResult, WorkflowContext};
+use fridi_core::github::detect_repo_in;
 use fridi_core::orchestrator::Orchestrator;
 use fridi_core::schema::Step;
 use fridi_mcp::config::generate_mcp_config;
@@ -101,8 +102,22 @@ impl AgentSpawner for OrchestratorSpawner {
                 config_path
             };
 
+            // Detect repo from git remote in the working directory instead of
+            // relying on the orchestrator's stored value, which may come from
+            // env vars or config that doesn't match the actual checkout.
+            let repo = match cwd.as_ref() {
+                Some(p) => {
+                    let p = p.clone();
+                    tokio::task::spawn_blocking(move || detect_repo_in(&p))
+                        .await
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default()
+                }
+                None => String::new(),
+            };
+
             let orch = orchestrator.lock().await;
-            let repo = orch.repo().to_string();
             let session_id_str = orch.session().id.to_string();
             let session_dir_str = orch.session_dir().to_string_lossy().to_string();
             drop(orch);

@@ -16,6 +16,7 @@ portable-pty = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 uuid = { workspace = true }
+strip-ansi-escapes = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -87,7 +87,15 @@ pub enum GitHubError {
 
 /// Detect the GitHub `owner/repo` from the current directory's git remote.
 pub fn detect_repo() -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    detect_repo_in(&cwd)
+}
+
+/// Detect the GitHub `owner/repo` from a specific directory's git remote.
+pub fn detect_repo_in(dir: &std::path::Path) -> Option<String> {
     let output = Command::new("git")
+        .arg("-C")
+        .arg(dir)
         .args(["remote", "get-url", "origin"])
         .output()
         .ok()?;
