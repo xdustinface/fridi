@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/cli",
     "crates/core",
     "crates/agent",
     "crates/mcp",
     "crates/notify",
     "crates/trigger",
     "crates/ui",
-    "crates/cli",
 ]
 
 [workspace.package]
@@ -21,6 +21,7 @@ fridi-core = { path = "crates/core" }
 fridi-agent = { path = "crates/agent" }
 fridi-mcp = { path = "crates/mcp" }
 fridi-notify = { path = "crates/notify" }
+fridi-cli = { path = "crates/cli" }
 fridi-trigger = { path = "crates/trigger" }
 
 # Serialization
