@@ -46,7 +46,7 @@ pub fn detect_repo() -> Option<String> {
     parse_repo_from_url(&url)
 }
 
-fn parse_repo_from_url(url: &str) -> Option<String> {
+pub(crate) fn parse_repo_from_url(url: &str) -> Option<String> {
     // ssh:// scheme: ssh://git@github.com/owner/repo.git
     if url.starts_with("ssh://") {
         let parts: Vec<&str> = url.trim_end_matches(".git").split('/').collect();
