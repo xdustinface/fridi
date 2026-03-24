@@ -26,6 +26,7 @@ impl Default for ClaudeAgentConfig {
 }
 
 /// Agent implementation that spawns Claude Code CLI sessions
+#[derive(Clone)]
 pub struct ClaudeAgent {
     config: ClaudeAgentConfig,
 }
