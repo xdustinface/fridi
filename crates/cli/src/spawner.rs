@@ -105,10 +105,17 @@ impl AgentSpawner for OrchestratorSpawner {
             // Detect repo from git remote in the working directory instead of
             // relying on the orchestrator's stored value, which may come from
             // env vars or config that doesn't match the actual checkout.
-            let repo = cwd
-                .as_ref()
-                .and_then(|p| detect_repo_in(p))
-                .unwrap_or_default();
+            let repo = match cwd.as_ref() {
+                Some(p) => {
+                    let p = p.clone();
+                    tokio::task::spawn_blocking(move || detect_repo_in(&p))
+                        .await
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default()
+                }
+                None => String::new(),
+            };
 
             let orch = orchestrator.lock().await;
             let session_id_str = orch.session().id.to_string();
