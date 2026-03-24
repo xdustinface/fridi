@@ -728,4 +728,213 @@ body {
     border-left: 3px solid var(--status-warning);
     border-radius: 3px;
 }
+
+/* Home tab */
+.home-tab {
+    font-weight: 600;
+}
+
+/* Dashboard */
+.dashboard {
+    padding: var(--space-8);
+    overflow-y: auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.dashboard-loading,
+.dashboard-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 14px;
+}
+
+.dashboard-loading {
+    color: var(--text-secondary);
+}
+
+.dashboard-error {
+    color: var(--status-error);
+}
+
+.dashboard-section {
+    background-color: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+}
+
+.dashboard-section-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.dashboard-section-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.dashboard-count {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px var(--space-2);
+    background-color: var(--surface-3);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+}
+
+.dashboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.dashboard-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-normal);
+}
+
+.dashboard-row:hover {
+    background-color: var(--surface-2);
+}
+
+.dashboard-number {
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 600;
+    flex-shrink: 0;
+    min-width: 40px;
+}
+
+.dashboard-title {
+    font-size: 13px;
+    color: var(--text-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-branch {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-tertiary);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.dashboard-time {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    min-width: 50px;
+    text-align: right;
+}
+
+.dashboard-labels {
+    display: flex;
+    gap: var(--space-1);
+    flex-shrink: 0;
+}
+
+.dashboard-label {
+    font-size: 11px;
+    padding: 1px var(--space-2);
+    background-color: var(--accent-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+}
+
+.ci-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px var(--space-2);
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+
+.ci-badge.passed {
+    background-color: rgba(135, 184, 135, 0.15);
+    color: var(--status-success);
+}
+
+.ci-badge.failed {
+    background-color: rgba(196, 112, 112, 0.15);
+    color: var(--status-error);
+}
+
+.ci-badge.pending {
+    background-color: rgba(196, 160, 78, 0.15);
+    color: var(--status-warning);
+}
+
+.ci-badge.none {
+    display: none;
+}
+
+.dashboard-empty {
+    padding: var(--space-4);
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-tertiary);
+}
+
+/* Quick actions strip */
+.quick-actions {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.quick-action-btn {
+    padding: var(--space-2) var(--space-4);
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color var(--transition-normal), border-color var(--transition-normal);
+}
+
+.quick-action-btn:hover:not(:disabled) {
+    background-color: var(--surface-3);
+    border-color: var(--accent);
+}
+
+.quick-action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.quick-action-btn.primary {
+    background-color: var(--accent-subtle);
+    border-color: var(--accent);
+    color: var(--accent-hover);
+}
+
+.quick-action-btn.primary:hover:not(:disabled) {
+    background-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.quick-action-error {
+    color: var(--status-error);
+    font-size: 12px;
+}
 "#;
