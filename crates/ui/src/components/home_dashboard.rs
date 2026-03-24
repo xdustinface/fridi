@@ -239,7 +239,13 @@ pub(crate) fn HomeDashboard(
                         count: overview.running_sessions,
                         children: rsx! {
                             div { class: "dashboard-row",
-                                span { class: "dashboard-title", "{overview.running_sessions} session(s) currently running" }
+                                span { class: "dashboard-title",
+                                    if overview.running_sessions == 1 {
+                                        "1 session currently running"
+                                    } else {
+                                        "{overview.running_sessions} sessions currently running"
+                                    }
+                                }
                             }
                         },
                     }
