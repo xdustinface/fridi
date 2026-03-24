@@ -6,8 +6,11 @@ edition.workspace = true
 [dependencies]
 fridi-core = { workspace = true }
 fridi-agent = { workspace = true }
+fridi-cli = { workspace = true }
+fridi-mcp = { workspace = true }
 fridi-notify = { workspace = true }
 fridi-trigger = { workspace = true }
+anyhow = { workspace = true }
 dioxus = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

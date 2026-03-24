@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 ///
 /// For each step, it registers the agent with the orchestrator, writes an MCP config
 /// file, and runs the Claude CLI session to completion.
-pub(crate) struct OrchestratorSpawner {
+pub struct OrchestratorSpawner {
     orchestrator: Arc<Mutex<Orchestrator>>,
     agent_config: ClaudeAgentConfig,
     mcp_socket_path: String,
@@ -23,7 +23,7 @@ pub(crate) struct OrchestratorSpawner {
 }
 
 impl OrchestratorSpawner {
-    pub(crate) fn new(
+    pub fn new(
         orchestrator: Arc<Mutex<Orchestrator>>,
         agent_config: ClaudeAgentConfig,
         mcp_socket_path: String,

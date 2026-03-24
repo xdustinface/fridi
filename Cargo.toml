@@ -19,9 +19,9 @@ license = "MIT"
 # Internal crates
 fridi-core = { path = "crates/core" }
 fridi-agent = { path = "crates/agent" }
+fridi-cli = { path = "crates/cli" }
 fridi-mcp = { path = "crates/mcp" }
 fridi-notify = { path = "crates/notify" }
-fridi-cli = { path = "crates/cli" }
 fridi-trigger = { path = "crates/trigger" }
 
 # Serialization
