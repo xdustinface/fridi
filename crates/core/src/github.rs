@@ -62,7 +62,8 @@ impl CiStatus {
             }
             if check.status.eq_ignore_ascii_case("in_progress")
                 || check.status.eq_ignore_ascii_case("queued")
-                || check.conclusion.is_empty()
+                || (check.conclusion.is_empty()
+                    && !check.status.eq_ignore_ascii_case("completed"))
             {
                 has_pending = true;
             }
