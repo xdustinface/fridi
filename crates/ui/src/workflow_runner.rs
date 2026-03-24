@@ -62,7 +62,14 @@ impl WorkflowRunner {
         let (engine, event_rx) = Engine::new();
 
         let agent_definitions = if self.agents_dir.exists() {
-            load_agent_definitions(&self.agents_dir).unwrap_or_default()
+            load_agent_definitions(&self.agents_dir).unwrap_or_else(|e| {
+                tracing::warn!(
+                    "failed to load agent definitions from {:?}: {}",
+                    self.agents_dir,
+                    e
+                );
+                Vec::new()
+            })
         } else {
             Vec::new()
         };

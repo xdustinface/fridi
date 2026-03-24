@@ -23,32 +23,42 @@ pub(crate) fn use_engine_events(
     let mut state = use_signal(LiveWorkflowState::default);
 
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let Some(mut receiver) = rx.write().take() else {
-            return;
-        };
-        while let Ok(event) = receiver.recv().await {
-            match event {
-                EngineEvent::StepStatusChanged { step_name, status } => {
-                    state.write().step_statuses.insert(step_name, status);
+        loop {
+            // Wait until a receiver is available
+            let mut receiver = loop {
+                if let Some(recv) = rx.write().take() {
+                    break recv;
                 }
-                EngineEvent::WorkflowStarted { .. } => {
-                    let mut s = state.write();
-                    s.workflow_status = Some(SessionStatus::Running);
-                    s.step_statuses.clear();
-                }
-                EngineEvent::WorkflowCompleted { .. } => {
-                    state.write().workflow_status = Some(SessionStatus::Completed);
-                }
-                EngineEvent::WorkflowFailed { reason, .. } => {
-                    let mut s = state.write();
-                    s.workflow_status = Some(SessionStatus::Failed);
-                    s.notifications.push(format!("Failed: {reason}"));
-                }
-                EngineEvent::NotificationRequired { step_name, message } => {
-                    state
-                        .write()
-                        .notifications
-                        .push(format!("[{step_name}] {message}"));
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            };
+
+            // Reset state for the new workflow session
+            *state.write() = LiveWorkflowState::default();
+
+            while let Ok(event) = receiver.recv().await {
+                match event {
+                    EngineEvent::StepStatusChanged { step_name, status } => {
+                        state.write().step_statuses.insert(step_name, status);
+                    }
+                    EngineEvent::WorkflowStarted { .. } => {
+                        let mut s = state.write();
+                        s.workflow_status = Some(SessionStatus::Running);
+                        s.step_statuses.clear();
+                    }
+                    EngineEvent::WorkflowCompleted { .. } => {
+                        state.write().workflow_status = Some(SessionStatus::Completed);
+                    }
+                    EngineEvent::WorkflowFailed { reason, .. } => {
+                        let mut s = state.write();
+                        s.workflow_status = Some(SessionStatus::Failed);
+                        s.notifications.push(format!("Failed: {reason}"));
+                    }
+                    EngineEvent::NotificationRequired { step_name, message } => {
+                        state
+                            .write()
+                            .notifications
+                            .push(format!("[{step_name}] {message}"));
+                    }
                 }
             }
         }
