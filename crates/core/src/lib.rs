@@ -1,3 +1,5 @@
+#[allow(dead_code)]
+pub(crate) mod backlog;
 pub mod dag;
 pub mod engine;
 pub mod github;
