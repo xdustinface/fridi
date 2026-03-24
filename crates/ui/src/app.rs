@@ -167,7 +167,7 @@ pub(crate) fn App() -> Element {
                 format!("issue-{number}"),
                 format!("Issue #{number}: {title}"),
             ),
-            SessionSource::PR { number, title } => {
+            SessionSource::PR { number, title, .. } => {
                 (format!("pr-{number}"), format!("PR #{number}: {title}"))
             }
             SessionSource::Prompt { text } => {
@@ -186,6 +186,9 @@ pub(crate) fn App() -> Element {
 
         let session_id = SessionId::new(&workflow_name);
         let repo = repo_for_create.clone();
+        let repo_str = repo.clone().unwrap_or_default();
+
+        let workflow = crate::workflow_runner::workflow_from_source(&source, &repo_str);
 
         let session = Session::new(
             session_id.clone(),
@@ -200,28 +203,23 @@ pub(crate) fn App() -> Element {
             return;
         }
 
-        // Find the first workflow to execute
-        let workflow_opt = workflows.read().first().map(|(wf, _)| wf.clone());
-
         // Start workflow execution in a background task
-        if let Some(workflow) = workflow_opt {
-            let runner_clone = runner.read().clone();
-            let session_clone = session.clone();
-            let store_clone = current_store;
-            spawn(async move {
-                match runner_clone
-                    .start(workflow, session_clone, store_clone)
-                    .await
-                {
-                    Ok(rx) => {
-                        engine_rx.set(Some(rx));
-                    }
-                    Err(e) => {
-                        eprintln!("failed to start workflow execution: {e}");
-                    }
+        let runner_clone = runner.read().clone();
+        let session_clone = session.clone();
+        let store_clone = current_store;
+        spawn(async move {
+            match runner_clone
+                .start(workflow, session_clone, store_clone)
+                .await
+            {
+                Ok(rx) => {
+                    engine_rx.set(Some(rx));
                 }
-            });
-        }
+                Err(e) => {
+                    eprintln!("failed to start workflow execution: {e}");
+                }
+            }
+        });
 
         let tab = TabInfo {
             session_id: session_id.clone(),
