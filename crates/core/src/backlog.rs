@@ -55,7 +55,7 @@ impl BacklogItem {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum BacklogError {
+pub enum BacklogError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("invalid item index: {0}")]
@@ -64,7 +64,7 @@ pub(crate) enum BacklogError {
 
 /// Persistent backlog stored as a markdown file.
 #[derive(Debug)]
-pub(crate) struct Backlog {
+pub struct Backlog {
     path: PathBuf,
     items: Vec<BacklogItem>,
 }
@@ -72,7 +72,7 @@ pub(crate) struct Backlog {
 impl Backlog {
     /// Load a backlog from the given file path. Returns an empty backlog if the
     /// file does not exist.
-    pub(crate) fn load(path: impl Into<PathBuf>) -> Result<Self, BacklogError> {
+    pub fn load(path: impl Into<PathBuf>) -> Result<Self, BacklogError> {
         let path = path.into();
         if !path.exists() {
             return Ok(Self {
@@ -87,7 +87,7 @@ impl Backlog {
     }
 
     /// Write the backlog back to disk, creating parent directories if needed.
-    pub(crate) fn save(&self) -> Result<(), BacklogError> {
+    pub fn save(&self) -> Result<(), BacklogError> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -104,7 +104,7 @@ impl Backlog {
     }
 
     /// Add a new item, parsing tags and priority from the text.
-    pub(crate) fn add(&mut self, text: &str, context: Option<&str>) {
+    pub fn add(&mut self, text: &str, context: Option<&str>) {
         let (priority, rest) = parse_priority(text);
         let tags = extract_tags(rest);
 

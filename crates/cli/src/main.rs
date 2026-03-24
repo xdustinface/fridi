@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use fridi_core::backlog::Backlog;
 
 mod run;
 mod spawner;
@@ -31,6 +32,12 @@ enum Commands {
         #[arg(long, default_value = ".fridi/sessions")]
         sessions_dir: PathBuf,
     },
+
+    /// Append an item to the local backlog
+    Backlog {
+        /// The backlog item text (supports inline #tags and !/!! priority)
+        text: String,
+    },
 }
 
 #[tokio::main]
@@ -51,5 +58,13 @@ async fn main() -> anyhow::Result<()> {
             agents_dir,
             sessions_dir,
         } => run::execute(workflow, repo, agents_dir, sessions_dir).await,
+        Commands::Backlog { text } => {
+            let path = PathBuf::from(".fridi/backlog.md");
+            let mut backlog = Backlog::load(&path)?;
+            backlog.add(&text, None);
+            backlog.save()?;
+            println!("Added to backlog: {text}");
+            Ok(())
+        }
     }
 }
