@@ -13,7 +13,6 @@ use crate::components::tab_bar::TabBar;
 use crate::components::workflow_view::WorkflowView;
 use crate::engine_bridge::use_engine_events;
 use crate::state::{self, TabInfo};
-use crate::styles;
 use crate::workflow_runner::WorkflowRunner;
 
 const SESSIONS_DIR: &str = ".fridi/sessions";
@@ -259,7 +258,6 @@ pub(crate) fn App() -> Element {
     };
 
     rsx! {
-        document::Style { {styles::APP_CSS} }
         div { class: "app-layout",
             TabBar {
                 tabs: tabs.read().clone(),
