@@ -30,9 +30,12 @@ pub(crate) fn use_engine_events(
 
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
         loop {
+            // Reset state so a new session starts with a clean slate
+            state.set(LiveWorkflowState::default());
+
             // Wait indefinitely for a receiver to become available. The signal
             // starts as None and is set to Some(rx) when a session is created.
-            let receiver = loop {
+            let mut receiver = loop {
                 if let Some(r) = rx.write().take() {
                     break r;
                 }
@@ -40,8 +43,15 @@ pub(crate) fn use_engine_events(
             };
 
             // Process events until the broadcast channel closes
-            let mut receiver = receiver;
-            while let Ok(event) = receiver.recv().await {
+            loop {
+                let event = match receiver.recv().await {
+                    Ok(event) => event,
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!("engine event receiver lagged by {n} messages");
+                        continue;
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                };
                 match event {
                     EngineEvent::StepStatusChanged { step_name, status } => {
                         state.write().step_statuses.insert(step_name, status);
@@ -75,9 +85,7 @@ pub(crate) fn use_engine_events(
                         }
                     }
                 }
-            }
-
-            // Channel closed (workflow finished) — loop back to wait for next session
+            } // broadcast closed — loop back to wait for next session
         }
     });
 
