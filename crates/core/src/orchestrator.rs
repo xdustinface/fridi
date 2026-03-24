@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::session::{AgentEntry, Session, SessionStore, SessionStoreError};
 
@@ -163,7 +163,7 @@ impl Orchestrator {
         parent: Option<&str>,
     ) -> Result<String, OrchestratorError> {
         if !self.role_configs.iter().any(|c| c.name == role) {
-            info!(role = %role, "no agent config found, using default");
+            warn!(role = %role, "no agent config found, using default");
             self.role_configs.push(AgentRoleConfig::default_for(role));
         }
 
