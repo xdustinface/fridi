@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct GitHubIssue {
@@ -8,6 +8,8 @@ pub struct GitHubIssue {
     pub title: String,
     #[serde(default)]
     pub labels: Vec<GitHubLabel>,
+    #[serde(rename = "updatedAt", default)]
+    pub updated_at: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -21,6 +23,56 @@ pub struct GitHubPR {
     pub title: String,
     #[serde(rename = "headRefName")]
     pub head_ref_name: String,
+    #[serde(rename = "updatedAt", default)]
+    pub updated_at: String,
+    #[serde(rename = "statusCheckRollup", default)]
+    pub status_check_rollup: Vec<StatusCheck>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct StatusCheck {
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub conclusion: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CiStatus {
+    Passed,
+    Failed,
+    Pending,
+    #[default]
+    None,
+}
+
+impl CiStatus {
+    /// Derive an aggregate CI status from a list of status check results.
+    pub fn from_checks(checks: &[StatusCheck]) -> Self {
+        if checks.is_empty() {
+            return Self::None;
+        }
+        let mut has_pending = false;
+        for check in checks {
+            if check.conclusion.eq_ignore_ascii_case("failure")
+                || check.conclusion.eq_ignore_ascii_case("error")
+            {
+                return Self::Failed;
+            }
+            if check.status.eq_ignore_ascii_case("in_progress")
+                || check.status.eq_ignore_ascii_case("queued")
+                || (check.conclusion.is_empty() && !check.status.eq_ignore_ascii_case("completed"))
+            {
+                has_pending = true;
+            }
+        }
+        if has_pending {
+            Self::Pending
+        } else {
+            Self::Passed
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -97,7 +149,7 @@ pub fn fetch_issues(repo: &str) -> Result<Vec<GitHubIssue>, GitHubError> {
             "--state",
             "open",
             "--json",
-            "number,title,labels",
+            "number,title,labels,updatedAt",
             "--limit",
             "50",
         ])
@@ -124,7 +176,7 @@ pub fn fetch_prs(repo: &str) -> Result<Vec<GitHubPR>, GitHubError> {
             "--state",
             "open",
             "--json",
-            "number,title,headRefName",
+            "number,title,headRefName,updatedAt,statusCheckRollup",
             "--limit",
             "50",
         ])
