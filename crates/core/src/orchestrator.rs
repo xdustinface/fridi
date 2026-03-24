@@ -163,6 +163,16 @@ impl Orchestrator {
         parent: Option<&str>,
     ) -> Result<String, OrchestratorError> {
         if !self.role_configs.iter().any(|c| c.name == role) {
+            if role.is_empty()
+                || role.len() > 128
+                || !role
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
+                return Err(OrchestratorError::RoleConfig(format!(
+                    "invalid role name: {role:?}"
+                )));
+            }
             warn!(role = %role, "no agent config found, using default");
             self.role_configs.push(AgentRoleConfig::default_for(role));
         }
