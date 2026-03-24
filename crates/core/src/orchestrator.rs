@@ -34,6 +34,22 @@ pub struct AgentRoleConfig {
     pub default_args: Vec<String>,
 }
 
+impl AgentRoleConfig {
+    /// Create a default config for a role that has no YAML definition.
+    /// The agent gets a plain Claude session with no special instructions.
+    pub(crate) fn default_for(role: &str) -> Self {
+        Self {
+            name: role.to_string(),
+            description: String::new(),
+            prompt: String::new(),
+            permissions: None,
+            allowed_tools: Vec::new(),
+            spawnable_roles: Vec::new(),
+            default_args: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum OrchestratorError {
     #[error("unknown agent role: {0}")]
@@ -147,7 +163,8 @@ impl Orchestrator {
         parent: Option<&str>,
     ) -> Result<String, OrchestratorError> {
         if !self.role_configs.iter().any(|c| c.name == role) {
-            return Err(OrchestratorError::UnknownRole(role.to_string()));
+            info!(role = %role, "no agent config found, using default");
+            self.role_configs.push(AgentRoleConfig::default_for(role));
         }
 
         let count = self.agent_counts.entry(role.to_string()).or_insert(0);
@@ -356,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unknown_role_error() {
+    fn test_unknown_role_gets_default_config() {
         let tmp = TempDir::new().unwrap();
         let store = SessionStore::new(tmp.path());
         let session = test_session();
@@ -370,10 +387,34 @@ mod tests {
             session_dir,
         );
 
-        let result = orch.spawn_agent("nonexistent", serde_json::json!({}), None);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("unknown agent role: nonexistent"));
+        // Unknown roles should succeed with a default config
+        let agent_id = orch
+            .spawn_agent("claude", serde_json::json!({}), None)
+            .unwrap();
+        assert_eq!(agent_id, "claude-1");
+
+        // The default config should have been added to role_configs
+        let config = orch
+            .role_configs()
+            .iter()
+            .find(|c| c.name == "claude")
+            .unwrap();
+        assert!(config.prompt.is_empty());
+        assert!(config.description.is_empty());
+        assert!(config.permissions.is_none());
+        assert!(config.allowed_tools.is_empty());
+
+        // Subsequent spawns of the same unknown role should reuse the config
+        let agent_id2 = orch
+            .spawn_agent("claude", serde_json::json!({}), None)
+            .unwrap();
+        assert_eq!(agent_id2, "claude-2");
+
+        // A different unknown role also gets a default
+        let agent_id3 = orch
+            .spawn_agent("custom-agent", serde_json::json!({}), None)
+            .unwrap();
+        assert_eq!(agent_id3, "custom-agent-1");
     }
 
     #[test]
