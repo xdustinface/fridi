@@ -41,6 +41,7 @@ impl OrchestratorSpawner {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn with_event_sender(mut self, tx: broadcast::Sender<EngineEvent>) -> Self {
         self.event_tx = Some(tx);
         self
