@@ -258,6 +258,42 @@ mod tests {
     }
 
     #[test]
+    fn test_ci_status_error_conclusion() {
+        use crate::github::StatusCheck;
+        let checks = vec![StatusCheck {
+            status: "completed".into(),
+            conclusion: "error".into(),
+        }];
+        assert_eq!(CiStatus::from_checks(&checks), CiStatus::Failed);
+    }
+
+    #[test]
+    fn test_ci_status_queued_is_pending() {
+        use crate::github::StatusCheck;
+        let checks = vec![StatusCheck {
+            status: "queued".into(),
+            conclusion: "".into(),
+        }];
+        assert_eq!(CiStatus::from_checks(&checks), CiStatus::Pending);
+    }
+
+    #[test]
+    fn test_ci_status_failure_takes_priority_over_pending() {
+        use crate::github::StatusCheck;
+        let checks = vec![
+            StatusCheck {
+                status: "completed".into(),
+                conclusion: "failure".into(),
+            },
+            StatusCheck {
+                status: "in_progress".into(),
+                conclusion: "".into(),
+            },
+        ];
+        assert_eq!(CiStatus::from_checks(&checks), CiStatus::Failed);
+    }
+
+    #[test]
     fn test_count_running_sessions() {
         use tempfile::TempDir;
 
