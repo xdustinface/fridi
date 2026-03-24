@@ -297,6 +297,11 @@ pub(crate) fn SessionCreator(
                             placeholder: "Describe the task...",
                             value: "{prompt_text}",
                             oninput: move |evt| prompt_text.set(evt.value()),
+                            onmounted: move |evt: MountedEvent| {
+                                spawn(async move {
+                                    let _ = evt.set_focus(true).await;
+                                });
+                            },
                         }
                         button {
                             class: "creator-submit",
