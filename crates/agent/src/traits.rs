@@ -38,6 +38,8 @@ pub struct AgentConfig {
     pub resume: bool,
     /// Human-readable name for the session
     pub session_name: Option<String>,
+    /// Path to an MCP config JSON file to pass via `--mcp-config`
+    pub mcp_config: Option<String>,
 }
 
 #[async_trait]
