@@ -16,10 +16,12 @@ fn main() {
                 .with_window(dioxus::desktop::WindowBuilder::new().with_title("fridi"))
                 .with_custom_head(format!(
                     r#"<style>{css}</style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css" />
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.js"></script>
+<style>{xterm_css}</style>
+<script>{xterm_js}</script>
 <script>window.fridiTerminals = {{}};</script>"#,
                     css = styles::APP_CSS,
+                    xterm_css = include_str!("../assets/xterm.css"),
+                    xterm_js = include_str!("../assets/xterm.js"),
                 )),
         )
         .with_context(app::DetectedRepo(repo))

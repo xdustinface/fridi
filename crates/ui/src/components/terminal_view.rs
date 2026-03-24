@@ -1,8 +1,17 @@
 use base64::Engine;
 use dioxus::prelude::*;
 
-/// Encodes raw bytes as base64 for safe transport into JavaScript strings.
-fn encode_for_js(data: &[u8]) -> String { base64::engine::general_purpose::STANDARD.encode(data) }
+/// Hex-encodes the step name to produce a collision-free terminal element ID.
+/// Plain sanitization (replacing non-alphanumeric chars with `-`) would collide
+/// for names like `build.foo` vs `build/foo`.
+fn terminal_id_for(step_name: &str) -> String {
+    let hex: String = step_name
+        .as_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("terminal-{hex}")
+}
 
 #[component]
 pub(crate) fn TerminalView(
@@ -20,14 +29,7 @@ pub(crate) fn TerminalView(
         _ => "pending",
     };
 
-    // Stable terminal ID derived from step name (replace non-alphanumeric chars)
-    let terminal_id = format!(
-        "terminal-{}",
-        step_name
-            .chars()
-            .map(|c| if c.is_alphanumeric() { c } else { '-' })
-            .collect::<String>()
-    );
+    let terminal_id = use_memo(use_reactive!(|step_name| terminal_id_for(&step_name)));
 
     // Track how many bytes we have already written to this xterm instance so we
     // only send the delta on each render.
@@ -36,13 +38,35 @@ pub(crate) fn TerminalView(
     // Track which terminal ID is currently initialized so we can detect step switches.
     let mut active_id = use_signal(String::new);
 
-    // Initialize xterm.js on the container div once it is mounted.
-    let tid = terminal_id.clone();
-    let _init = use_resource(move || {
-        let tid = tid.clone();
-        async move {
-            // Small delay to ensure the DOM element exists before we call open().
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    // Whether the xterm instance for the current terminal_id has been created.
+    let mut terminal_ready = use_signal(|| false);
+
+    // When the step changes, reset tracking state and destroy old terminal.
+    if *active_id.read() != *terminal_id.read() {
+        let old_id = active_id.read().clone();
+        if !old_id.is_empty() {
+            let js = format!(
+                r#"
+                (function() {{
+                    let t = window.fridiTerminals['{old_id}'];
+                    if (t) {{ t.dispose(); delete window.fridiTerminals['{old_id}']; }}
+                }})();
+                "#,
+            );
+            spawn(async move {
+                let _ = document::eval(&js).await;
+            });
+        }
+        active_id.set(terminal_id.read().clone());
+        written_len.set(0);
+        terminal_ready.set(false);
+    }
+
+    // Initialize xterm.js when the container div is mounted in the DOM.
+    let tid_for_mount = terminal_id.read().clone();
+    let on_mounted = move |_evt: MountedEvent| {
+        let tid = tid_for_mount.clone();
+        spawn(async move {
             let js = format!(
                 r#"
                 (function() {{
@@ -68,37 +92,35 @@ pub(crate) fn TerminalView(
                 "#,
             );
             let _ = document::eval(&js).await;
-        }
-    });
-
-    // When the step changes, reset tracking state and destroy old terminal.
-    if *active_id.read() != terminal_id {
-        // Destroy old terminal if it existed under a different ID
-        let old_id = active_id.read().clone();
-        if !old_id.is_empty() {
-            let js = format!(
-                r#"
-                (function() {{
-                    let t = window.fridiTerminals['{old_id}'];
-                    if (t) {{ t.dispose(); delete window.fridiTerminals['{old_id}']; }}
-                }})();
-                "#,
-            );
-            spawn(async move {
-                let _ = document::eval(&js).await;
-            });
-        }
-        active_id.set(terminal_id.clone());
-        written_len.set(0);
-    }
+            terminal_ready.set(true);
+        });
+    };
 
     // Write new output data to the xterm instance (only the delta since last write).
     let current_len = output.len();
     let already_written = *written_len.read();
-    if current_len > already_written {
+
+    // Handle output shrinking (e.g., step re-run replaces buffer with shorter content).
+    if current_len < already_written {
+        written_len.set(0);
+        let tid = terminal_id.read().clone();
+        if *terminal_ready.read() {
+            spawn(async move {
+                let js = format!(
+                    r#"
+                    (function() {{
+                        let t = window.fridiTerminals['{tid}'];
+                        if (t) t.clear();
+                    }})();
+                    "#,
+                );
+                let _ = document::eval(&js).await;
+            });
+        }
+    } else if current_len > already_written && *terminal_ready.read() {
         let new_data = &output[already_written..current_len];
-        let b64 = encode_for_js(new_data);
-        let tid = terminal_id.clone();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(new_data);
+        let tid = terminal_id.read().clone();
         written_len.set(current_len);
         spawn(async move {
             let js = format!(
@@ -115,6 +137,23 @@ pub(crate) fn TerminalView(
         });
     }
 
+    // Dispose the xterm instance when the component unmounts to avoid leaking memory.
+    let cleanup_id = terminal_id.read().clone();
+    use_drop(move || {
+        let js = format!(
+            r#"
+            (function() {{
+                let t = window.fridiTerminals['{cleanup_id}'];
+                if (t) {{ t.dispose(); delete window.fridiTerminals['{cleanup_id}']; }}
+            }})();
+            "#,
+        );
+        // Fire-and-forget cleanup eval.
+        spawn(async move {
+            let _ = document::eval(&js).await;
+        });
+    });
+
     rsx! {
         div { class: "terminal-view",
             div { class: "terminal-header",
@@ -128,6 +167,7 @@ pub(crate) fn TerminalView(
             div {
                 id: "{terminal_id}",
                 class: "terminal-xterm-container",
+                onmounted: on_mounted,
             }
         }
     }
