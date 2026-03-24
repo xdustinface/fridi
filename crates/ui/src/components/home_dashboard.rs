@@ -88,17 +88,19 @@ pub(crate) fn HomeDashboard(
     let mut state = use_signal(|| FetchState::Loading);
     let mut pick_state = use_signal(|| PickState::Idle);
     let repo_clone = repo.clone();
+    let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
     // Fetch on mount and poll every 60s
     use_coroutine(move |_: UnboundedReceiver<()>| {
         let repo = repo_clone.clone();
+        let work_dir = work_dir.clone();
         async move {
             loop {
                 let overview = {
                     let repo = repo.clone();
+                    let work_dir = work_dir.clone();
                     tokio::task::spawn_blocking(move || {
                         let repo_str = repo.as_deref().unwrap_or("");
-                        let work_dir = PathBuf::from(".");
                         let store = SessionStore::new(SESSIONS_DIR);
                         fridi_core::project_overview::fetch_project_overview(
                             repo_str, &work_dir, &store,
