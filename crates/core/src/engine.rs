@@ -83,7 +83,9 @@ impl WorkflowContext {
         self.step_outputs.get(step_name)
     }
 
-    pub fn get_config(&self, key: &str) -> Option<&JsonValue> { self.config.get(key) }
+    pub fn get_config(&self, key: &str) -> Option<&JsonValue> {
+        self.config.get(key)
+    }
 
     /// Build context map for passing to an agent
     pub fn as_agent_context(&self) -> HashMap<String, JsonValue> {
@@ -125,12 +127,18 @@ impl Engine {
     }
 
     /// Subscribe to engine events
-    pub fn subscribe(&self) -> broadcast::Receiver<EngineEvent> { self.event_tx.subscribe() }
+    pub fn subscribe(&self) -> broadcast::Receiver<EngineEvent> {
+        self.event_tx.subscribe()
+    }
 
     /// Get a clone of the event sender for forwarding events from external sources
-    pub fn event_sender(&self) -> broadcast::Sender<EngineEvent> { self.event_tx.clone() }
+    pub fn event_sender(&self) -> broadcast::Sender<EngineEvent> {
+        self.event_tx.clone()
+    }
 
-    fn emit(&self, event: EngineEvent) { let _ = self.event_tx.send(event); }
+    fn emit(&self, event: EngineEvent) {
+        let _ = self.event_tx.send(event);
+    }
 
     /// Execute a workflow to completion, respecting the DAG ordering
     pub async fn execute(
@@ -314,7 +322,9 @@ impl Engine {
 }
 
 impl Default for Engine {
-    fn default() -> Self { Self::new().0 }
+    fn default() -> Self {
+        Self::new().0
+    }
 }
 
 /// Process a step result, returning true if the step succeeded
@@ -431,7 +441,9 @@ mod tests {
                 .insert(step_name.to_string(), result);
         }
 
-        fn call_order(&self) -> Vec<String> { self.call_order.lock().unwrap().clone() }
+        fn call_order(&self) -> Vec<String> {
+            self.call_order.lock().unwrap().clone()
+        }
     }
 
     impl AgentSpawner for MockSpawner {
@@ -634,6 +646,96 @@ steps:
         let ctx = WorkflowContext::default();
         assert!(evaluate_condition("true", &ctx));
         assert!(!evaluate_condition("false", &ctx));
+    }
+
+    #[tokio::test]
+    async fn test_engine_events_flow_through_mock_spawner() {
+        let yaml = r#"
+name: event-test
+steps:
+  - name: emit-step
+    agent: claude
+"#;
+        let wf = Workflow::from_yaml(yaml).unwrap();
+        let dag = WorkflowDag::from_workflow(&wf).unwrap();
+
+        // Create an engine and a mock spawner that emits AgentOutput via event_tx
+        let (engine, mut rx) = Engine::new();
+        let event_tx = engine.event_sender();
+
+        struct EventEmittingSpawner {
+            event_tx: broadcast::Sender<EngineEvent>,
+        }
+
+        impl AgentSpawner for EventEmittingSpawner {
+            fn spawn_step(
+                &self,
+                step: &Step,
+                _context: &WorkflowContext,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<StepResult, String>> + Send>,
+            > {
+                let tx = self.event_tx.clone();
+                let name = step.name.clone();
+                Box::pin(async move {
+                    let _ = tx.send(EngineEvent::AgentOutput {
+                        step_name: name,
+                        data: b"mock output data".to_vec(),
+                    });
+                    Ok(StepResult {
+                        exit_code: 0,
+                        output: "done".to_string(),
+                        structured_output: None,
+                    })
+                })
+            }
+        }
+
+        let spawner = EventEmittingSpawner { event_tx };
+
+        engine.execute(&wf, &dag, &spawner).await.unwrap();
+
+        // Drain all events and check we got the expected types
+        let mut got_started = false;
+        let mut got_running = false;
+        let mut got_agent_output = false;
+        let mut got_completed_step = false;
+        let mut got_workflow_completed = false;
+
+        while let Ok(event) = rx.try_recv() {
+            match event {
+                EngineEvent::WorkflowStarted { .. } => got_started = true,
+                EngineEvent::StepStatusChanged { status, .. } => match status {
+                    StepStatus::Running => got_running = true,
+                    StepStatus::Completed => got_completed_step = true,
+                    _ => {}
+                },
+                EngineEvent::AgentOutput { data, .. } => {
+                    assert_eq!(data, b"mock output data");
+                    got_agent_output = true;
+                }
+                EngineEvent::WorkflowCompleted { .. } => got_workflow_completed = true,
+                _ => {}
+            }
+        }
+
+        assert!(got_started, "should receive WorkflowStarted event");
+        assert!(
+            got_running,
+            "should receive StepStatusChanged(Running) event"
+        );
+        assert!(
+            got_agent_output,
+            "should receive AgentOutput event from mock spawner"
+        );
+        assert!(
+            got_completed_step,
+            "should receive StepStatusChanged(Completed) event"
+        );
+        assert!(
+            got_workflow_completed,
+            "should receive WorkflowCompleted event"
+        );
     }
 
     #[test]

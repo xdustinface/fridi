@@ -96,7 +96,9 @@ impl PtyProcess {
         })
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> { self.output_tx.subscribe() }
+    pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> {
+        self.output_tx.subscribe()
+    }
 
     pub async fn write_stdin(&self, data: &[u8]) -> Result<(), AgentError> {
         let mut writer = self.writer.lock().await;
@@ -135,7 +137,9 @@ impl PtyProcess {
         Ok(())
     }
 
-    pub fn is_running(&self) -> bool { self.running.load(Ordering::Relaxed) }
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::Relaxed)
+    }
 
     pub async fn collected_output(&self) -> String {
         let collected = self.collected_output.lock().await;
@@ -174,6 +178,81 @@ mod tests {
         proc.kill().await.unwrap();
         let output = proc.collected_output().await;
         assert!(output.contains("hello from stdin"), "output was: {output}");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_broadcast_subscriber_receives_output() {
+        let mut cmd = CommandBuilder::new("echo");
+        cmd.arg("hello world");
+        let mut proc = PtyProcess::spawn(cmd).unwrap();
+
+        // Subscribe BEFORE the process produces output
+        let mut rx = proc.subscribe();
+
+        let exit_code = proc.wait().await.unwrap();
+        assert_eq!(exit_code, 0);
+
+        // Collect all Stdout events from the broadcast channel
+        let mut received = Vec::new();
+        while let Ok(output) = rx.try_recv() {
+            if let AgentOutput::Stdout(data) = output {
+                received.extend_from_slice(&data);
+            }
+        }
+        let text = String::from_utf8_lossy(&received);
+        assert!(
+            text.contains("hello world"),
+            "broadcast subscriber should receive 'hello world', got: {text}"
+        );
+
+        // Also verify collected_output matches
+        let collected = proc.collected_output().await;
+        assert!(
+            collected.contains("hello world"),
+            "collected_output should contain 'hello world', got: {collected}"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_late_subscriber_receives_output() {
+        // Spawn a PTY — do NOT subscribe before spawning
+        let mut cmd = CommandBuilder::new("echo");
+        cmd.arg("hello late");
+        let mut proc = PtyProcess::spawn(cmd).unwrap();
+
+        // Small delay to let the reader task start producing output
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Subscribe AFTER spawn (this is the suspected bug scenario)
+        let mut rx = proc.subscribe();
+
+        let exit_code = proc.wait().await.unwrap();
+        assert_eq!(exit_code, 0);
+
+        // Collect any Stdout events the late subscriber received
+        let mut received = Vec::new();
+        while let Ok(output) = rx.try_recv() {
+            if let AgentOutput::Stdout(data) = output {
+                received.extend_from_slice(&data);
+            }
+        }
+        let text = String::from_utf8_lossy(&received);
+
+        // The late subscriber may or may not have received the output depending
+        // on timing. collected_output should always have it though.
+        let collected = proc.collected_output().await;
+        assert!(
+            collected.contains("hello late"),
+            "collected_output should always contain data, got: {collected}"
+        );
+
+        // This assertion may fail — that would pinpoint the bug where output
+        // is lost between spawn and subscribe
+        assert!(
+            text.contains("hello late"),
+            "late subscriber should receive 'hello late', got: {text} \
+             (collected_output has it: {collected})"
+        );
     }
 
     #[tokio::test]
