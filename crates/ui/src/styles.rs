@@ -693,14 +693,18 @@ body {
 
 .terminal-xterm-container {
     flex: 1;
+    position: relative;
     overflow: hidden;
-    width: 100%;
-    min-height: 300px;
+    min-height: 0;
     background-color: var(--surface-0);
 }
 
 .terminal-xterm-container .xterm {
-    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
 }
 
 .terminal-xterm-container .xterm-viewport {
