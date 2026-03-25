@@ -5,6 +5,7 @@ use fridi_core::session::Session;
 
 use crate::components::step_card::StepCard;
 use crate::components::terminal_view::TerminalView;
+use crate::components::toast::{ToastLevel, Toasts};
 use crate::engine_bridge::SessionLiveState;
 
 /// Information about the currently selected step, used by the terminal view.
@@ -156,18 +157,38 @@ pub(crate) fn WorkflowView(session: Session, live_state: Option<SessionLiveState
         }
     });
 
+    // Push new notifications as toasts. Track how many we have already shown
+    // so we only fire each notification once.
+    let mut shown_count = use_signal(|| 0usize);
     let notifications: Vec<String> = live_state
         .as_ref()
         .map(|ls| ls.notifications.clone())
         .unwrap_or_default();
+    let already_shown = *shown_count.read();
+    if notifications.len() > already_shown {
+        let mut toasts = use_context::<Toasts>().0;
+        for msg in &notifications[already_shown..] {
+            let level = if msg.starts_with("Failed:") {
+                ToastLevel::Error
+            } else {
+                ToastLevel::Warning
+            };
+            let id = crate::components::toast::next_toast_id();
+            toasts.write().push(crate::components::toast::ToastMessage {
+                id,
+                message: msg.clone(),
+                level,
+                created_at: std::time::Instant::now(),
+                exiting: false,
+            });
+        }
+        shown_count.set(notifications.len());
+    }
 
     rsx! {
         crate::components::split_pane::SplitPane {
             top: dag_view,
             bottom: terminal,
-        }
-        if !notifications.is_empty() {
-            NotificationBar { notifications }
         }
     }
 }
@@ -179,16 +200,5 @@ fn format_status(status: &StepStatus) -> String {
         StepStatus::Completed => "Completed".to_string(),
         StepStatus::Failed(reason) => format!("Failed: {reason}"),
         StepStatus::Skipped => "Skipped".to_string(),
-    }
-}
-
-#[component]
-fn NotificationBar(notifications: Vec<String>) -> Element {
-    rsx! {
-        div { class: "notification-bar",
-            for (i, msg) in notifications.iter().enumerate() {
-                div { key: "{i}", class: "notification-item", "{msg}" }
-            }
-        }
     }
 }
