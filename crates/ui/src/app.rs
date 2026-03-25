@@ -315,19 +315,32 @@ pub(crate) fn App() -> Element {
         session_idx.and_then(|idx| tabs_read.get(idx).map(|tab| tab.workflow_name.clone()))
     };
 
-    let on_global_keydown = move |evt: KeyboardEvent| {
-        if evt.modifiers().meta() && evt.key() == Key::Character("i".to_string()) {
-            evt.prevent_default();
-            showing_quick_capture.toggle();
+    // Poll global JS flag for Cmd+B quick capture toggle
+    use_coroutine(move |_: UnboundedReceiver<()>| async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            let result = document::eval(
+                r#"
+                let val = window.fridiToggleQuickCapture || false;
+                if (val) { window.fridiToggleQuickCapture = false; }
+                val
+                "#,
+            )
+            .await;
+            if let Ok(val) = result {
+                if val.as_bool().unwrap_or(false) {
+                    showing_quick_capture.toggle();
+                }
+            }
         }
-    };
+    });
 
     let on_dismiss_quick_capture = move |()| {
         showing_quick_capture.set(false);
     };
 
     rsx! {
-        div { class: "app-layout", onkeydown: on_global_keydown, tabindex: "0",
+        div { class: "app-layout",
             TabBar {
                 tabs: tabs.read().clone(),
                 active: session_idx,

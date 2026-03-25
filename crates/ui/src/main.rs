@@ -19,7 +19,15 @@ fn main() {
 <style>{xterm_css}</style>
 <script>{xterm_js}</script>
 <script>{xterm_fit_js}</script>
-<script>window.fridiTerminals = {{}};</script>"#,
+<script>window.fridiTerminals = {{}};
+window.fridiToggleQuickCapture = false;
+document.addEventListener('keydown', function(e) {{
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {{
+        e.preventDefault();
+        window.fridiToggleQuickCapture = true;
+    }}
+}});
+</script>"#,
                     css = styles::APP_CSS,
                     xterm_css = include_str!("../assets/xterm.css"),
                     xterm_js = include_str!("../assets/xterm.js"),
