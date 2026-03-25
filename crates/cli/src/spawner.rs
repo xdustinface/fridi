@@ -125,6 +125,9 @@ impl AgentSpawner for OrchestratorSpawner {
 
             let mcp_socket_exists = std::path::Path::new(&mcp_socket_path).exists();
 
+            // Build the resizer key before moving session_id_str into the template context.
+            let resizer_key = format!("{}:{}", session_id_str, step_name);
+
             let template_ctx = TemplateContext {
                 repo,
                 session_id: session_id_str,
@@ -170,9 +173,10 @@ impl AgentSpawner for OrchestratorSpawner {
             let agent = ClaudeAgent::new(agent_config);
             let mut handle = agent.spawn(config).await.map_err(|e| e.to_string())?;
 
-            // Register PTY resizer so the UI can resize the terminal
+            // Register PTY resizer so the UI can resize the terminal.
+            // Key format must match the lookup in terminal_view.
             if let Some(resizer) = handle.resizer() {
-                pty::register_resizer(&step_name, resizer);
+                pty::register_resizer(&resizer_key, resizer);
             }
 
             // Forward PTY output to engine events if a sender is available.
@@ -198,7 +202,7 @@ impl AgentSpawner for OrchestratorSpawner {
 
             let exit_code = handle.wait().await.map_err(|e| e.to_string())?;
 
-            pty::remove_resizer(&step_name);
+            pty::remove_resizer(&resizer_key);
 
             // Wait for the forwarder to finish draining
             if let Some(handle) = forwarder {

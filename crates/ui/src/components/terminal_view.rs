@@ -121,10 +121,10 @@ pub(crate) fn TerminalView(
     };
 
     // Event-driven PTY resize via `dioxus.send()`/`eval.recv()`.
-    let resize_step = step_name.clone();
+    let resize_key = format!("{}:{}", session_id, step_name);
     let resize_tid = terminal_id.read().clone();
     use_coroutine(move |_: UnboundedReceiver<()>| {
-        let step = resize_step.clone();
+        let step = resize_key.clone();
         let tid = resize_tid.clone();
         async move {
             // Wait for the terminal to be created in JS.
