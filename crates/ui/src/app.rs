@@ -320,20 +320,108 @@ pub(crate) fn App() -> Element {
         session_idx.and_then(|idx| tabs_read.get(idx).map(|tab| tab.workflow_name.clone()))
     };
 
-    // Listen for Cmd+B / Ctrl+B via dioxus.send from a global keydown handler
-    use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        let mut eval = document::eval(
-            r#"
+    // Global keyboard shortcut listener
+    let repo_for_keys = default_repo.clone();
+    use_coroutine(move |_: UnboundedReceiver<()>| {
+        let repo_for_keys = repo_for_keys.clone();
+        async move {
+            let mut eval = document::eval(
+                r#"
             document.addEventListener('keydown', function(e) {
-                if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+                var mod = e.metaKey || e.ctrlKey;
+                if (mod && e.key === 'b') {
                     e.preventDefault();
-                    dioxus.send('toggle');
+                    dioxus.send('toggle-quick-capture');
+                } else if (mod && e.key === 't') {
+                    e.preventDefault();
+                    dioxus.send('new-session');
+                } else if (mod && e.key === 'w') {
+                    e.preventDefault();
+                    dioxus.send('close-tab');
+                } else if (mod && e.key >= '1' && e.key <= '9') {
+                    e.preventDefault();
+                    dioxus.send('tab-' + e.key);
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    dioxus.send('escape');
                 }
             });
             "#,
-        );
-        while eval.recv::<String>().await.is_ok() {
-            showing_quick_capture.toggle();
+            );
+            loop {
+                let Ok(msg) = eval.recv::<String>().await else {
+                    break;
+                };
+                match msg.as_str() {
+                    "toggle-quick-capture" => {
+                        showing_quick_capture.toggle();
+                    }
+                    "new-session" => {
+                        showing_creator.set(true);
+                    }
+                    "close-tab" => {
+                        let current = *active_pane.read();
+                        if let ActivePane::Session(idx) = current {
+                            let t = tabs.read();
+                            if idx < t.len() {
+                                let closed_sid = t[idx].session_id.clone();
+                                let closed_id_str = closed_sid.as_str().to_string();
+                                drop(t);
+
+                                tabs.write().remove(idx);
+                                engine_receivers.write().remove(&closed_sid);
+                                live_states.write().remove(&closed_sid);
+
+                                let len = tabs.read().len();
+                                let repo_key = repo_for_keys.clone().unwrap_or_default();
+                                let mut ws = window_state.write();
+                                ws.update_tab(&repo_key, &closed_id_str, false);
+                                save_window_state(&ws);
+                                drop(ws);
+
+                                if len == 0 {
+                                    active_pane.set(ActivePane::Home);
+                                } else if idx >= len {
+                                    active_pane.set(ActivePane::Session(len - 1));
+                                }
+                            }
+                        }
+                    }
+                    "escape" => {
+                        if *showing_quick_capture.read() {
+                            showing_quick_capture.set(false);
+                        } else if *showing_creator.read() {
+                            showing_creator.set(false);
+                        }
+                    }
+                    other => {
+                        if let Some(digit) = other.strip_prefix("tab-") {
+                            if let Ok(n) = digit.parse::<usize>() {
+                                match n {
+                                    1 => active_pane.set(ActivePane::Home),
+                                    2 => active_pane.set(ActivePane::Backlog),
+                                    _ => {
+                                        let session_idx = n - 3;
+                                        let t = tabs.read();
+                                        if session_idx < t.len() {
+                                            if let Some(tab) = t.get(session_idx) {
+                                                let repo_key =
+                                                    repo_for_keys.clone().unwrap_or_default();
+                                                let mut ws = window_state.write();
+                                                ws.set_active(&repo_key, tab.session_id.as_str());
+                                                save_window_state(&ws);
+                                                drop(ws);
+                                            }
+                                            drop(t);
+                                            active_pane.set(ActivePane::Session(session_idx));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     });
 
