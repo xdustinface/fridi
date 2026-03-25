@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use fridi_core::backlog::Backlog;
+use fridi_core::backlog::{Backlog, backlog_path};
 
 mod run;
 mod spawner;
@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
             sessions_dir,
         } => run::execute(workflow, repo, agents_dir, sessions_dir).await,
         Commands::Backlog { text } => {
-            let path = PathBuf::from(".fridi/backlog.md");
+            let path = backlog_path();
             let mut backlog = Backlog::load(&path)?;
             backlog.add(&text, None);
             backlog.save()?;
