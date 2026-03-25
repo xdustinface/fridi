@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
@@ -231,6 +231,14 @@ fn open_url(url: &str) {
     });
 }
 
+/// Return the pending body if one exists, otherwise the issue's original body.
+fn get_effective_body(issue: &IssueSummary, pending: &HashMap<u64, String>) -> String {
+    pending
+        .get(&issue.number)
+        .cloned()
+        .unwrap_or_else(|| issue.body.clone().unwrap_or_default())
+}
+
 #[component]
 pub(crate) fn HomeDashboard(
     repo: Option<String>,
@@ -248,12 +256,13 @@ pub(crate) fn HomeDashboard(
     let mut state = use_signal(|| initial_state);
     let mut pick_state = use_signal(|| PickState::Idle);
     let mut removing_labels: Signal<HashSet<u64>> = use_signal(HashSet::new);
+    let mut pending_bodies: Signal<HashMap<u64, String>> = use_signal(HashMap::new);
+    let mut saving_issues: Signal<HashSet<u64>> = use_signal(HashSet::new);
     let mut is_refreshing = use_signal(|| true);
     let mut seconds_since_fetch: Signal<u32> = use_signal(|| 0);
     let mut fetch_failed = use_signal(|| false);
     let mut expanded_prs: Signal<HashSet<u64>> = use_signal(HashSet::new);
     let mut expanded_issues: Signal<HashSet<u64>> = use_signal(HashSet::new);
-    let mut updating_checkboxes: Signal<HashSet<(u64, usize)>> = use_signal(HashSet::new);
     let mut toasts = use_context::<Toasts>().0;
     let repo_clone = repo.clone();
     let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -546,7 +555,7 @@ pub(crate) fn HomeDashboard(
                                     let chevron_class = if is_expanded { "expand-chevron expanded" } else { "expand-chevron" };
                                     let issue_url = issue.url.clone();
                                     let issue_clone = issue.clone();
-                                    let repo_for_cb = repo.clone().unwrap_or_default();
+                                    let has_pending = pending_bodies.read().contains_key(&issue_number);
                                     rsx! {
                                         div { key: "issue-{issue_number}",
                                             div {
@@ -580,15 +589,19 @@ pub(crate) fn HomeDashboard(
                                                 if let Some((done, total)) = issue_clone.task_progress {
                                                     span { class: "task-progress-text", "{done}/{total}" }
                                                 }
+                                                if has_pending {
+                                                    span { class: "dashboard-pending-dot" }
+                                                }
                                                 span { class: "dashboard-time", "{relative_time(&issue_clone.updated_at)}" }
                                             }
                                             if is_expanded {
                                                 {render_issue_detail(
                                                     &issue_clone,
-                                                    &repo_for_cb,
+                                                    &repo,
                                                     has_repo,
                                                     &mut state,
-                                                    &mut updating_checkboxes,
+                                                    &mut pending_bodies,
+                                                    &mut saving_issues,
                                                     &mut toasts,
                                                     on_pick_issue,
                                                 )}
@@ -676,21 +689,44 @@ fn render_pr_detail(pr: &fridi_core::project_overview::PrSummary) -> Element {
     }
 }
 
+#[component]
+fn DashboardSection(title: String, empty_msg: String, count: usize, children: Element) -> Element {
+    rsx! {
+        div { class: "dashboard-section",
+            div { class: "dashboard-section-header",
+                h3 { "{title}" }
+                span { class: "dashboard-count", "{count}" }
+            }
+            if count == 0 {
+                div { class: "dashboard-empty", "{empty_msg}" }
+            } else {
+                div { class: "dashboard-list", {children} }
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn render_issue_detail(
     issue: &IssueSummary,
-    repo: &str,
+    repo: &Option<String>,
     has_repo: bool,
     state: &mut Signal<FetchState>,
-    updating_checkboxes: &mut Signal<HashSet<(u64, usize)>>,
+    pending_bodies: &mut Signal<HashMap<u64, String>>,
+    saving_issues: &mut Signal<HashSet<u64>>,
     toasts: &mut Signal<Vec<ToastMessage>>,
     on_pick_issue: EventHandler<SessionSource>,
 ) -> Element {
     let issue_number = issue.number;
-    let checkboxes = issue
-        .body
-        .as_deref()
-        .map(parse_checkboxes)
-        .unwrap_or_default();
+    let body = get_effective_body(issue, &pending_bodies.read());
+    let checkboxes = parse_checkboxes(&body);
+    let has_pending = pending_bodies.read().contains_key(&issue_number);
+    let is_saving = saving_issues.read().contains(&issue_number);
+
+    let mut pending_bodies = *pending_bodies;
+    let mut saving_issues = *saving_issues;
+    let mut state = *state;
+    let mut toasts = *toasts;
 
     rsx! {
         div { class: "card-detail",
@@ -736,71 +772,106 @@ fn render_issue_detail(
             if !checkboxes.is_empty() {
                 div { class: "card-stat", style: "flex-direction: column; align-items: flex-start;",
                     span { class: "card-stat-label", "Tasks" }
-                    for cb in &checkboxes {
-                        {
-                            let line_idx = cb.line_index;
-                            let is_updating = updating_checkboxes.read().contains(&(issue_number, line_idx));
-                            let item_class = if is_updating { "checkbox-item checkbox-updating" } else { "checkbox-item" };
-                            let marker = if cb.checked { "[x]" } else { "[ ]" };
-                            let repo_str = repo.to_string();
-                            let state = *state;
-                            let mut updating_checkboxes = *updating_checkboxes;
-                            let mut toasts = *toasts;
-                            rsx! {
-                                div {
-                                    class: "{item_class}",
-                                    onclick: move |evt: Event<MouseData>| {
-                                        evt.stop_propagation();
-                                        if !has_repo || is_updating {
-                                            return;
+                    div { class: "issue-detail-tasks",
+                        for cb in &checkboxes {
+                            {
+                                let line_idx = cb.line_index;
+                                let checkbox_class = if has_pending {
+                                    "issue-checkbox-row checkbox-pending"
+                                } else {
+                                    "issue-checkbox-row"
+                                };
+                                rsx! {
+                                    div {
+                                        class: "{checkbox_class}",
+                                        key: "cb-{issue_number}-{line_idx}",
+                                        input {
+                                            class: "issue-checkbox",
+                                            r#type: "checkbox",
+                                            checked: cb.checked,
+                                            disabled: is_saving,
+                                            onchange: move |_| {
+                                                let current_body = {
+                                                    let pending = pending_bodies.read();
+                                                    pending.get(&issue_number).cloned()
+                                                };
+                                                let base_body = current_body.unwrap_or_else(|| {
+                                                    if let FetchState::Loaded(ref overview) = *state.read() {
+                                                        overview
+                                                            .open_issues
+                                                            .iter()
+                                                            .find(|i| i.number == issue_number)
+                                                            .and_then(|i| i.body.clone())
+                                                            .unwrap_or_default()
+                                                    } else {
+                                                        String::new()
+                                                    }
+                                                });
+                                                let new_body = toggle_checkbox_in_body(&base_body, line_idx);
+                                                pending_bodies.write().insert(issue_number, new_body);
+                                            },
                                         }
-                                        let r = repo_str.clone();
-                                        updating_checkboxes.write().insert((issue_number, line_idx));
-                                        let mut state = state;
-                                        spawn(async move {
-                                            let new_body = {
-                                                let st = state.read();
-                                                if let FetchState::Loaded(ref data) = *st {
-                                                    data.open_issues.iter()
-                                                        .find(|i| i.number == issue_number)
-                                                        .and_then(|i| i.body.as_deref())
-                                                        .map(|b| toggle_checkbox_in_body(b, line_idx))
-                                                } else {
-                                                    None
-                                                }
-                                            };
-                                            if let Some(body) = new_body {
-                                                let body_clone = body.clone();
-                                                let result = tokio::task::spawn_blocking(move || {
-                                                    github::update_issue_body(&r, issue_number, &body_clone)
-                                                }).await;
-                                                updating_checkboxes.write().remove(&(issue_number, line_idx));
-                                                match result {
-                                                    Ok(Ok(())) => {
-                                                        if let FetchState::Loaded(ref mut data) = *state.write() {
-                                                            if let Some(issue) = data.open_issues.iter_mut().find(|i| i.number == issue_number) {
-                                                                issue.task_progress = fridi_core::project_overview::parse_task_progress(&body);
-                                                                issue.body = Some(body);
-                                                            }
-                                                        }
-                                                        push_toast(&mut toasts, "Task updated", ToastLevel::Success);
-                                                    }
-                                                    Ok(Err(e)) => {
-                                                        push_toast(&mut toasts, format!("Failed to update: {e}"), ToastLevel::Error);
-                                                    }
-                                                    Err(e) => {
-                                                        push_toast(&mut toasts, format!("Failed to update: {e}"), ToastLevel::Error);
-                                                    }
-                                                }
-                                            } else {
-                                                updating_checkboxes.write().remove(&(issue_number, line_idx));
-                                            }
-                                        });
-                                    },
-                                    span { "{marker}" }
-                                    span { "{cb.text}" }
+                                        span { class: "issue-checkbox-label", "{cb.text}" }
+                                    }
                                 }
                             }
+                        }
+                    }
+                }
+                if has_pending {
+                    div { class: "issue-detail-actions",
+                        button {
+                            class: "save-btn",
+                            disabled: is_saving || !has_repo,
+                            onclick: {
+                                let repo_str = repo.clone().unwrap_or_default();
+                                move |evt: Event<MouseData>| {
+                                    evt.stop_propagation();
+                                    let body_to_save = {
+                                        let pending = pending_bodies.read();
+                                        pending.get(&issue_number).cloned()
+                                    };
+                                    let Some(body) = body_to_save else { return };
+                                    saving_issues.write().insert(issue_number);
+                                    let r = repo_str.clone();
+                                    let b = body.clone();
+                                    spawn(async move {
+                                        let result = tokio::task::spawn_blocking(move || {
+                                            github::update_issue_body(&r, issue_number, &b)
+                                        })
+                                        .await;
+                                        saving_issues.write().remove(&issue_number);
+                                        match result {
+                                            Ok(Ok(())) => {
+                                                let saved_body = pending_bodies
+                                                    .write()
+                                                    .remove(&issue_number)
+                                                    .unwrap_or(body);
+                                                if let FetchState::Loaded(ref mut overview) =
+                                                    *state.write()
+                                                {
+                                                    if let Some(issue) = overview
+                                                        .open_issues
+                                                        .iter_mut()
+                                                        .find(|i| i.number == issue_number)
+                                                    {
+                                                        issue.task_progress = fridi_core::project_overview::parse_task_progress(&saved_body);
+                                                        issue.body = Some(saved_body);
+                                                    }
+                                                }
+                                                push_toast(&mut toasts, "Tasks saved", ToastLevel::Success);
+                                            }
+                                            Ok(Err(e)) => {
+                                                push_toast(&mut toasts, format!("Failed to save: {e}"), ToastLevel::Error);
+                                            }
+                                            Err(e) => {
+                                                push_toast(&mut toasts, format!("Failed to save: {e}"), ToastLevel::Error);
+                                            }
+                                        }
+                                    });
+                                }
+                            },
+                            if is_saving { "Saving..." } else { "Save" }
                         }
                     }
                 }
@@ -820,23 +891,6 @@ fn render_issue_detail(
                     },
                     "Analyze"
                 }
-            }
-        }
-    }
-}
-
-#[component]
-fn DashboardSection(title: String, empty_msg: String, count: usize, children: Element) -> Element {
-    rsx! {
-        div { class: "dashboard-section",
-            div { class: "dashboard-section-header",
-                h3 { "{title}" }
-                span { class: "dashboard-count", "{count}" }
-            }
-            if count == 0 {
-                div { class: "dashboard-empty", "{empty_msg}" }
-            } else {
-                div { class: "dashboard-list", {children} }
             }
         }
     }
@@ -1058,5 +1112,23 @@ mod tests {
         let body = "- [ ] only task";
         let result = toggle_checkbox_in_body(body, 0);
         assert_eq!(result, "- [x] only task");
+    }
+
+    #[test]
+    fn get_effective_body_uses_pending() {
+        let issue = IssueSummary {
+            number: 42,
+            title: "test".into(),
+            labels: vec![],
+            updated_at: String::new(),
+            body: Some("original".into()),
+            assignees: vec![],
+            url: String::new(),
+            task_progress: None,
+        };
+        let mut pending = HashMap::new();
+        assert_eq!(get_effective_body(&issue, &pending), "original");
+        pending.insert(42, "modified".into());
+        assert_eq!(get_effective_body(&issue, &pending), "modified");
     }
 }

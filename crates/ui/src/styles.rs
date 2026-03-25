@@ -1038,6 +1038,102 @@ body {
     color: var(--text-tertiary);
 }
 
+.dashboard-row.selected {
+    background-color: var(--surface-2);
+}
+
+.dashboard-task-progress {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.dashboard-pending-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--status-warning);
+    flex-shrink: 0;
+}
+
+.issue-detail {
+    padding: var(--space-3) var(--space-3) var(--space-3) var(--space-8);
+    background-color: var(--surface-2);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-1);
+}
+
+.issue-detail-empty {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.issue-detail-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.issue-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    border-left: 2px solid transparent;
+    transition: border-color var(--transition-normal);
+}
+
+.issue-checkbox-row.checkbox-pending {
+    border-left-color: var(--accent);
+    background-color: var(--accent-subtle);
+}
+
+.issue-checkbox {
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.issue-checkbox:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.issue-checkbox-label {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.issue-detail-actions {
+    margin-top: var(--space-3);
+    display: flex;
+    gap: var(--space-2);
+}
+
+.save-btn {
+    padding: var(--space-1) var(--space-4);
+    background-color: var(--accent-subtle);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    color: var(--accent-hover);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+.save-btn:hover:not(:disabled) {
+    background-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.save-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 /* Sync status pill button */
 .sync-status {
     display: flex;
