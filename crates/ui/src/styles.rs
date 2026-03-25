@@ -1042,7 +1042,7 @@ body {
 .sync-status {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
     cursor: pointer;
     align-self: flex-end;
     padding: 4px 10px;
@@ -1063,8 +1063,8 @@ body {
 }
 
 .sync-dot {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
 }
