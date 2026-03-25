@@ -107,6 +107,50 @@ pub(crate) fn TerminalView(
                     requestAnimationFrame(doFit);
                     new ResizeObserver(() => syncSize()).observe(el.parentElement);
                     window.fridiTerminals['{tid}'] = term;
+
+                    // Debug: log dimensions of the entire element chain
+                    setTimeout(function() {{
+                        let debug = [];
+                        let current = el;
+                        while (current && current !== document.body) {{
+                            let style = window.getComputedStyle(current);
+                            debug.push(
+                                current.tagName +
+                                (current.id ? '#' + current.id : '') +
+                                (current.className ? '.' + current.className.split(' ')[0] : '') +
+                                ': ' + current.clientWidth + 'x' + current.clientHeight +
+                                ' (computed: ' + style.width + ' x ' + style.height + ')' +
+                                ' overflow: ' + style.overflow +
+                                ' display: ' + style.display +
+                                ' position: ' + style.position +
+                                ' flex: ' + style.flex
+                            );
+                            current = current.parentElement;
+                        }}
+                        console.log('XTERM DEBUG: element chain dimensions:\\n' + debug.join('\\n'));
+
+                        // Also log xterm internal state
+                        if (window.fridiTerminals) {{
+                            let t = window.fridiTerminals[Object.keys(window.fridiTerminals)[0]];
+                            if (t) {{
+                                console.log('XTERM DEBUG: cols=' + t.cols + ' rows=' + t.rows);
+                                let core = t._core;
+                                if (core && core._renderService) {{
+                                    let dims = core._renderService.dimensions;
+                                    if (dims) {{
+                                        console.log('XTERM DEBUG: cell width=' + dims.css.cell.width + ' cell height=' + dims.css.cell.height);
+                                    }}
+                                }}
+                            }}
+                        }}
+
+                        let debugEl = document.getElementById('xterm-debug');
+                        if (debugEl) {{
+                            debugEl.textContent = 'container: ' + el.clientWidth + 'x' + el.clientHeight +
+                                ' | parent: ' + el.parentElement.clientWidth + 'x' + el.parentElement.clientHeight +
+                                ' | cols: ' + (window.fridiTerminals['{tid}'] ? window.fridiTerminals['{tid}'].cols : '?');
+                        }}
+                    }}, 500);
                 }})();
                 "#,
             );
@@ -176,6 +220,11 @@ pub(crate) fn TerminalView(
     });
 
     rsx! {
+        div {
+            id: "xterm-debug",
+            style: "position: fixed; bottom: 0; right: 0; background: red; color: white; padding: 4px; font-size: 10px; z-index: 9999;",
+            "debug loading..."
+        }
         div { class: "terminal-view",
             div { class: "terminal-header",
                 span { class: "terminal-step-name", "{step_name}" }
