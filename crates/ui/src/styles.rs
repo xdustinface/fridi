@@ -649,6 +649,7 @@ body {
     flex-direction: column;
     height: 100%;
     background-color: var(--surface-0);
+    overflow: hidden;
 }
 
 .terminal-header {
@@ -694,6 +695,7 @@ body {
     flex: 1;
     overflow: hidden;
     width: 100%;
+    min-height: 300px;
     background-color: var(--surface-0);
 }
 

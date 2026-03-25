@@ -91,6 +91,7 @@ pub(crate) fn TerminalView(
                     term.loadAddon(fitAddon);
                     fitAddon.fit();
                     setTimeout(() => fitAddon.fit(), 100);
+                    setTimeout(() => fitAddon.fit(), 500);
                     new ResizeObserver(() => fitAddon.fit()).observe(el);
                     window.fridiTerminals['{tid}'] = term;
                 }})();

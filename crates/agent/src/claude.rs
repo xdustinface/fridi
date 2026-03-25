@@ -39,6 +39,8 @@ pub struct ClaudeAgentConfig {
     pub binary: String,
     /// Default arguments to pass to every invocation
     pub default_args: Vec<String>,
+    /// Model to use (passed via `--model`)
+    pub model: String,
 }
 
 impl Default for ClaudeAgentConfig {
@@ -46,6 +48,7 @@ impl Default for ClaudeAgentConfig {
         Self {
             binary: "claude".to_string(),
             default_args: Vec::new(),
+            model: "claude-opus-4-6".to_string(),
         }
     }
 }
@@ -74,6 +77,10 @@ impl Agent for ClaudeAgent {
         for arg in &self.config.default_args {
             cmd.arg(arg);
         }
+
+        cmd.arg("--model");
+        cmd.arg(&self.config.model);
+        cmd.arg("--dangerously-skip-permissions");
 
         // Resolve the session ID: use provided or generate a new one
         let session_id = config
@@ -142,7 +149,7 @@ impl Agent for ClaudeAgent {
         // A brief delay lets the Claude CLI finish initializing before
         // receiving input.
         if let Some(prompt) = prompt {
-            tokio::time::sleep(Duration::from_millis(150)).await;
+            tokio::time::sleep(Duration::from_millis(2000)).await;
             let result = pty.write_stdin(prompt.as_bytes()).await;
             let result = match result {
                 Ok(()) => pty.write_stdin(b"\n").await,
@@ -204,6 +211,7 @@ mod tests {
         let config = ClaudeAgentConfig {
             binary: "/usr/local/bin/claude".to_string(),
             default_args: vec!["--verbose".to_string()],
+            ..Default::default()
         };
         let agent = ClaudeAgent::new(config);
         assert_eq!(agent.config.binary, "/usr/local/bin/claude");
@@ -216,6 +224,7 @@ mod tests {
         let agent = ClaudeAgent::new(ClaudeAgentConfig {
             binary: "echo".to_string(),
             default_args: Vec::new(),
+            ..Default::default()
         });
         agent.spawn(config).await.unwrap()
     }
