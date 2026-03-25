@@ -732,10 +732,10 @@ fn render_issue_detail(
             if !checkboxes.is_empty() {
                 div { class: "card-stat", style: "flex-direction: column; align-items: flex-start;",
                     span { class: "card-stat-label", "Tasks" }
-                    for (cb_idx, cb) in checkboxes.iter().enumerate() {
+                    for cb in &checkboxes {
                         {
                             let line_idx = cb.line_index;
-                            let is_updating = updating_checkboxes.read().contains(&(issue_number, cb_idx));
+                            let is_updating = updating_checkboxes.read().contains(&(issue_number, line_idx));
                             let item_class = if is_updating { "checkbox-item checkbox-updating" } else { "checkbox-item" };
                             let marker = if cb.checked { "[x]" } else { "[ ]" };
                             let repo_str = repo.to_string();
@@ -751,7 +751,7 @@ fn render_issue_detail(
                                             return;
                                         }
                                         let r = repo_str.clone();
-                                        updating_checkboxes.write().insert((issue_number, cb_idx));
+                                        updating_checkboxes.write().insert((issue_number, line_idx));
                                         let mut state = state;
                                         spawn(async move {
                                             let new_body = {
@@ -770,7 +770,7 @@ fn render_issue_detail(
                                                 let result = tokio::task::spawn_blocking(move || {
                                                     github::update_issue_body(&r, issue_number, &body_clone)
                                                 }).await;
-                                                updating_checkboxes.write().remove(&(issue_number, cb_idx));
+                                                updating_checkboxes.write().remove(&(issue_number, line_idx));
                                                 match result {
                                                     Ok(Ok(())) => {
                                                         if let FetchState::Loaded(ref mut data) = *state.write() {
@@ -789,7 +789,7 @@ fn render_issue_detail(
                                                     }
                                                 }
                                             } else {
-                                                updating_checkboxes.write().remove(&(issue_number, cb_idx));
+                                                updating_checkboxes.write().remove(&(issue_number, line_idx));
                                             }
                                         });
                                     },

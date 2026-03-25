@@ -286,7 +286,7 @@ pub fn update_issue_body(repo: &str, issue_number: u64, new_body: &str) -> Resul
         .spawn()?;
 
     if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(payload.as_bytes());
+        stdin.write_all(payload.as_bytes())?;
     }
 
     let output = child.wait_with_output()?;
