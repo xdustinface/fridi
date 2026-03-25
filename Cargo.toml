@@ -82,3 +82,6 @@ base64 = "0.22"
 
 # Dioxus
 dioxus = { version = "0.7" }
+
+# Open URLs in browser
+open = "5"

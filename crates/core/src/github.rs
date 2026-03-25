@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,17 @@ pub struct GitHubIssue {
     pub labels: Vec<GitHubLabel>,
     #[serde(rename = "updatedAt", default)]
     pub updated_at: String,
+    #[serde(default)]
+    pub body: Option<String>,
+    #[serde(default)]
+    pub assignees: Option<Vec<Assignee>>,
+    #[serde(default)]
+    pub url: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct Assignee {
+    pub login: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -29,10 +41,22 @@ pub struct GitHubPR {
     pub status_check_rollup: Vec<StatusCheck>,
     #[serde(default)]
     pub labels: Vec<GitHubLabel>,
+    #[serde(default)]
+    pub additions: Option<u64>,
+    #[serde(default)]
+    pub deletions: Option<u64>,
+    #[serde(rename = "changedFiles", default)]
+    pub changed_files: Option<u64>,
+    #[serde(rename = "reviewDecision", default)]
+    pub review_decision: Option<String>,
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct StatusCheck {
+    #[serde(default)]
+    pub name: Option<String>,
     #[serde(default)]
     pub status: String,
     #[serde(default)]
@@ -159,7 +183,7 @@ pub fn fetch_issues(repo: &str) -> Result<Vec<GitHubIssue>, GitHubError> {
             "--state",
             "open",
             "--json",
-            "number,title,labels,updatedAt",
+            "number,title,labels,updatedAt,body,assignees,url",
             "--limit",
             "50",
         ])
@@ -186,7 +210,7 @@ pub fn fetch_prs(repo: &str) -> Result<Vec<GitHubPR>, GitHubError> {
             "--state",
             "open",
             "--json",
-            "number,title,headRefName,updatedAt,statusCheckRollup,labels",
+            "number,title,headRefName,updatedAt,statusCheckRollup,labels,additions,deletions,changedFiles,reviewDecision,url",
             "--limit",
             "50",
         ])
@@ -242,6 +266,36 @@ pub fn auto_pick_issue(repo: &str) -> Result<Option<GitHubIssue>, GitHubError> {
     });
 
     Ok(Some(priority_issue.unwrap_or(&issues[0]).clone()))
+}
+
+pub fn update_issue_body(repo: &str, issue_number: u64, new_body: &str) -> Result<(), GitHubError> {
+    let mut child = Command::new("gh")
+        .args([
+            "issue",
+            "edit",
+            &issue_number.to_string(),
+            "--repo",
+            repo,
+            "--body-file",
+            "-",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(new_body.as_bytes())?;
+    }
+
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        return Err(GitHubError::NonZero {
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        });
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

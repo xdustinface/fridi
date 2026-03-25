@@ -1398,4 +1398,181 @@ body {
 .confirm-dialog-btn.confirm:hover {
     background-color: #d47a7a;
 }
+
+/* Dashboard interactive cards */
+.dashboard-link {
+    cursor: pointer;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.dashboard-link:hover {
+    text-decoration: underline;
+    color: var(--accent-hover);
+}
+
+.dashboard-row-clickable {
+    cursor: pointer;
+    transition: background-color var(--transition-normal);
+}
+
+.dashboard-row-clickable:hover {
+    background-color: var(--surface-2);
+}
+
+.expand-chevron {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    transition: transform var(--transition-normal);
+    display: inline-block;
+}
+
+.expand-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.card-detail {
+    background-color: var(--surface-2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: var(--space-3) var(--space-4);
+    margin: var(--space-1) 0 var(--space-1) 40px;
+}
+
+.card-stat {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    font-size: 12px;
+}
+
+.card-stat-label {
+    color: var(--text-tertiary);
+    min-width: 90px;
+    flex-shrink: 0;
+}
+
+.card-stat-value {
+    color: var(--text-primary);
+}
+
+.check-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 12px;
+    padding: 2px 0;
+}
+
+.check-passed {
+    color: var(--status-success);
+}
+
+.check-failed {
+    color: var(--status-error);
+}
+
+.check-pending {
+    color: var(--status-warning);
+}
+
+.review-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    display: inline-block;
+}
+
+.review-badge.approved {
+    background-color: rgba(135, 184, 135, 0.15);
+    color: var(--status-success);
+}
+
+.review-badge.changes-requested {
+    background-color: rgba(196, 112, 112, 0.15);
+    color: var(--status-error);
+}
+
+.review-badge.review-required {
+    background-color: rgba(196, 160, 78, 0.15);
+    color: var(--status-warning);
+}
+
+.task-progress-bar {
+    width: 100%;
+    height: 6px;
+    background-color: var(--surface-3);
+    border-radius: 3px;
+    overflow: hidden;
+    flex: 1;
+}
+
+.task-progress-fill {
+    height: 100%;
+    background-color: var(--accent);
+    border-radius: 3px;
+    transition: width var(--transition-normal);
+}
+
+.task-progress-text {
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 2px 0;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.checkbox-item:hover {
+    color: var(--accent-hover);
+}
+
+.checkbox-updating {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.assignee-badge {
+    font-size: 11px;
+    padding: 1px var(--space-2);
+    background-color: var(--surface-3);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+}
+
+.card-detail-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.card-detail-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: var(--space-1) var(--space-3);
+    background-color: var(--accent-subtle);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    color: var(--accent-hover);
+    cursor: pointer;
+    transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+.card-detail-btn:hover {
+    background-color: var(--accent);
+    color: var(--text-primary);
+}
 "#;

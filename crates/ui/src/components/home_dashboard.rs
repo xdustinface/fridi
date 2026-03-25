@@ -4,10 +4,11 @@ use std::sync::{Mutex, OnceLock};
 
 use dioxus::prelude::*;
 use fridi_core::github::{self, CiStatus};
-use fridi_core::project_overview::ProjectOverview;
+use fridi_core::project_overview::{IssueSummary, ProjectOverview};
 use fridi_core::session::SessionStore;
 
 use crate::components::session_creator::SessionSource;
+use crate::components::toast::{ToastLevel, ToastMessage, Toasts, push_toast};
 
 static CACHED_OVERVIEW: OnceLock<Mutex<Option<ProjectOverview>>> = OnceLock::new();
 
@@ -44,6 +45,13 @@ enum PickState {
     Idle,
     Loading,
     Error(String),
+}
+
+/// A parsed checkbox line from an issue body.
+struct CheckboxLine {
+    checked: bool,
+    text: String,
+    line_index: usize,
 }
 
 /// Parses an ISO 8601 date string and returns a human-readable relative time.
@@ -136,6 +144,93 @@ fn ci_badge_label(status: &CiStatus) -> &'static str {
     }
 }
 
+fn check_icon_and_class(conclusion: &Option<String>, status: &str) -> (&'static str, &'static str) {
+    match conclusion.as_deref() {
+        Some("success") => ("ok", "check-passed"),
+        Some("failure" | "error" | "timed_out" | "cancelled") => ("x", "check-failed"),
+        _ if status == "completed" => ("?", "check-pending"),
+        _ => ("~", "check-pending"),
+    }
+}
+
+fn review_badge_class(decision: &str) -> &'static str {
+    match decision {
+        "APPROVED" => "review-badge approved",
+        "CHANGES_REQUESTED" => "review-badge changes-requested",
+        _ => "review-badge review-required",
+    }
+}
+
+fn parse_checkboxes(body: &str) -> Vec<CheckboxLine> {
+    body.lines()
+        .enumerate()
+        .filter_map(|(line_index, line)| {
+            let trimmed = line.trim_start();
+            if let Some(rest) = trimmed
+                .strip_prefix("- [x] ")
+                .or_else(|| trimmed.strip_prefix("- [X] "))
+            {
+                Some(CheckboxLine {
+                    checked: true,
+                    text: rest.to_string(),
+                    line_index,
+                })
+            } else {
+                trimmed.strip_prefix("- [ ] ").map(|rest| CheckboxLine {
+                    checked: false,
+                    text: rest.to_string(),
+                    line_index,
+                })
+            }
+        })
+        .collect()
+}
+
+fn toggle_checkbox_in_body(body: &str, line_index: usize) -> String {
+    let had_trailing_newline = body.ends_with('\n');
+    let mut result: String = body
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            if i == line_index {
+                let trimmed = line.trim_start();
+                let prefix = &line[..line.len() - trimmed.len()];
+                if let Some(rest) = trimmed
+                    .strip_prefix("- [x] ")
+                    .or_else(|| trimmed.strip_prefix("- [X] "))
+                {
+                    format!("{prefix}- [ ] {rest}")
+                } else if let Some(rest) = trimmed.strip_prefix("- [ ] ") {
+                    format!("{prefix}- [x] {rest}")
+                } else {
+                    line.to_string()
+                }
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if had_trailing_newline {
+        result.push('\n');
+    }
+    result
+}
+
+fn open_url(url: &str) {
+    if !url.starts_with("https://") {
+        return;
+    }
+    let url = url.to_string();
+    spawn(async move {
+        match tokio::task::spawn_blocking(move || open::that(&url)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => tracing::warn!("Failed to open URL: {e}"),
+            Err(e) => tracing::warn!("Failed to open URL: {e}"),
+        }
+    });
+}
+
 #[component]
 pub(crate) fn HomeDashboard(
     repo: Option<String>,
@@ -156,6 +251,10 @@ pub(crate) fn HomeDashboard(
     let mut is_refreshing = use_signal(|| true);
     let mut seconds_since_fetch: Signal<u32> = use_signal(|| 0);
     let mut fetch_failed = use_signal(|| false);
+    let mut expanded_prs: Signal<HashSet<u64>> = use_signal(HashSet::new);
+    let mut expanded_issues: Signal<HashSet<u64>> = use_signal(HashSet::new);
+    let mut updating_checkboxes: Signal<HashSet<(u64, usize)>> = use_signal(HashSet::new);
+    let mut toasts = use_context::<Toasts>().0;
     let repo_clone = repo.clone();
     let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
@@ -364,40 +463,69 @@ pub(crate) fn HomeDashboard(
                                     let needs_human = pr.labels.iter().any(|l| l == "needs-human");
                                     let pr_number = pr.number;
                                     let is_removing = removing_labels.read().contains(&pr_number);
+                                    let is_expanded = expanded_prs.read().contains(&pr_number);
+                                    let chevron_class = if is_expanded { "expand-chevron expanded" } else { "expand-chevron" };
+                                    let row_class = "dashboard-row dashboard-row-clickable";
+                                    let pr_url = pr.url.clone();
+                                    let pr_clone = pr.clone();
                                     rsx! {
-                                        div { class: "dashboard-row", key: "pr-{pr_number}",
-                                            span { class: "dashboard-number", "#{pr.number}" }
-                                            span { class: "dashboard-title", "{pr.title}" }
-                                            span { class: "dashboard-branch", "{pr.branch}" }
-                                            span { class: ci_badge_class(&pr.ci_status), "{ci_badge_label(&pr.ci_status)}" }
-                                            if needs_human {
-                                                button {
-                                                    class: "dashboard-ready-btn",
-                                                    disabled: is_removing || !has_repo,
+                                        div { key: "pr-{pr_number}",
+                                            div {
+                                                class: "{row_class}",
+                                                onclick: move |_| {
+                                                    let mut set = expanded_prs.write();
+                                                    if !set.remove(&pr_number) {
+                                                        set.insert(pr_number);
+                                                    }
+                                                },
+                                                span { class: "{chevron_class}", ">" }
+                                                span {
+                                                    class: "dashboard-link",
                                                     onclick: {
-                                                        let repo_str = repo.clone().unwrap_or_default();
-                                                        move |_| {
-                                                            let r = repo_str.clone();
-                                                            removing_labels.write().insert(pr_number);
-                                                            spawn(async move {
-                                                                let result = tokio::task::spawn_blocking(move || {
-                                                                    github::remove_pr_label(&r, pr_number, "needs-human")
-                                                                }).await;
-                                                                removing_labels.write().remove(&pr_number);
-                                                                if let Ok(Ok(())) = result {
-                                                                    if let FetchState::Loaded(ref mut data) = *state.write() {
-                                                                        if let Some(pr) = data.open_prs.iter_mut().find(|p| p.number == pr_number) {
-                                                                            pr.labels.retain(|l| l != "needs-human");
-                                                                        }
-                                                                    }
-                                                                }
-                                                            });
+                                                        let url = pr_url.clone();
+                                                        move |evt: Event<MouseData>| {
+                                                            evt.stop_propagation();
+                                                            open_url(&url);
                                                         }
                                                     },
-                                                    if is_removing { "Removing..." } else { "Ready" }
+                                                    "#{pr_number}"
                                                 }
+                                                span { class: "dashboard-title", "{pr_clone.title}" }
+                                                span { class: "dashboard-branch", "{pr_clone.branch}" }
+                                                span { class: ci_badge_class(&pr_clone.ci_status), "{ci_badge_label(&pr_clone.ci_status)}" }
+                                                if needs_human {
+                                                    button {
+                                                        class: "dashboard-ready-btn",
+                                                        disabled: is_removing || !has_repo,
+                                                        onclick: {
+                                                            let repo_str = repo.clone().unwrap_or_default();
+                                                            move |evt: Event<MouseData>| {
+                                                                evt.stop_propagation();
+                                                                let r = repo_str.clone();
+                                                                removing_labels.write().insert(pr_number);
+                                                                spawn(async move {
+                                                                    let result = tokio::task::spawn_blocking(move || {
+                                                                        github::remove_pr_label(&r, pr_number, "needs-human")
+                                                                    }).await;
+                                                                    removing_labels.write().remove(&pr_number);
+                                                                    if let Ok(Ok(())) = result {
+                                                                        if let FetchState::Loaded(ref mut data) = *state.write() {
+                                                                            if let Some(pr) = data.open_prs.iter_mut().find(|p| p.number == pr_number) {
+                                                                                pr.labels.retain(|l| l != "needs-human");
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }
+                                                        },
+                                                        if is_removing { "Removing..." } else { "Ready" }
+                                                    }
+                                                }
+                                                span { class: "dashboard-time", "{relative_time(&pr_clone.updated_at)}" }
                                             }
-                                            span { class: "dashboard-time", "{relative_time(&pr.updated_at)}" }
+                                            if is_expanded {
+                                                {render_pr_detail(&pr_clone)}
+                                            }
                                         }
                                     }
                                 }
@@ -412,17 +540,61 @@ pub(crate) fn HomeDashboard(
                         count: overview.open_issues.len(),
                         children: rsx! {
                             for issue in &overview.open_issues {
-                                div { class: "dashboard-row", key: "issue-{issue.number}",
-                                    span { class: "dashboard-number", "#{issue.number}" }
-                                    span { class: "dashboard-title", "{issue.title}" }
-                                    if !issue.labels.is_empty() {
-                                        span { class: "dashboard-labels",
-                                            for label in &issue.labels {
-                                                span { class: "dashboard-label", "{label}" }
+                                {
+                                    let issue_number = issue.number;
+                                    let is_expanded = expanded_issues.read().contains(&issue_number);
+                                    let chevron_class = if is_expanded { "expand-chevron expanded" } else { "expand-chevron" };
+                                    let issue_url = issue.url.clone();
+                                    let issue_clone = issue.clone();
+                                    let repo_for_cb = repo.clone().unwrap_or_default();
+                                    rsx! {
+                                        div { key: "issue-{issue_number}",
+                                            div {
+                                                class: "dashboard-row dashboard-row-clickable",
+                                                onclick: move |_| {
+                                                    let mut set = expanded_issues.write();
+                                                    if !set.remove(&issue_number) {
+                                                        set.insert(issue_number);
+                                                    }
+                                                },
+                                                span { class: "{chevron_class}", ">" }
+                                                span {
+                                                    class: "dashboard-link",
+                                                    onclick: {
+                                                        let url = issue_url.clone();
+                                                        move |evt: Event<MouseData>| {
+                                                            evt.stop_propagation();
+                                                            open_url(&url);
+                                                        }
+                                                    },
+                                                    "#{issue_number}"
+                                                }
+                                                span { class: "dashboard-title", "{issue_clone.title}" }
+                                                if !issue_clone.labels.is_empty() {
+                                                    span { class: "dashboard-labels",
+                                                        for label in &issue_clone.labels {
+                                                            span { class: "dashboard-label", "{label}" }
+                                                        }
+                                                    }
+                                                }
+                                                if let Some((done, total)) = issue_clone.task_progress {
+                                                    span { class: "task-progress-text", "{done}/{total}" }
+                                                }
+                                                span { class: "dashboard-time", "{relative_time(&issue_clone.updated_at)}" }
+                                            }
+                                            if is_expanded {
+                                                {render_issue_detail(
+                                                    &issue_clone,
+                                                    &repo_for_cb,
+                                                    has_repo,
+                                                    &mut state,
+                                                    &mut updating_checkboxes,
+                                                    &mut toasts,
+                                                    on_pick_issue,
+                                                )}
                                             }
                                         }
                                     }
-                                    span { class: "dashboard-time", "{relative_time(&issue.updated_at)}" }
                                 }
                             }
                         },
@@ -445,6 +617,208 @@ pub(crate) fn HomeDashboard(
                             }
                         },
                     }
+                }
+            }
+        }
+    }
+}
+
+fn render_pr_detail(pr: &fridi_core::project_overview::PrSummary) -> Element {
+    let additions = pr.additions;
+    let deletions = pr.deletions;
+    let changed_files = pr.changed_files;
+
+    rsx! {
+        div { class: "card-detail",
+            div { class: "card-stat",
+                span { class: "card-stat-label", "Files changed" }
+                span { class: "card-stat-value", "{changed_files} files (+{additions} / -{deletions})" }
+            }
+            div { class: "card-stat",
+                span { class: "card-stat-label", "Branch" }
+                span { class: "card-stat-value", "{pr.branch}" }
+            }
+            if let Some(ref decision) = pr.review_decision {
+                div { class: "card-stat",
+                    span { class: "card-stat-label", "Review" }
+                    span { class: review_badge_class(decision), "{decision}" }
+                }
+            }
+            if !pr.checks.is_empty() {
+                div { class: "card-stat",
+                    span { class: "card-stat-label", "CI checks" }
+                    div {
+                        for check in &pr.checks {
+                            {
+                                let (icon, class) = check_icon_and_class(&check.conclusion, &check.status);
+                                rsx! {
+                                    div { class: "check-item",
+                                        span { class: "{class}", "{icon}" }
+                                        span { "{check.name}" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if !pr.labels.is_empty() {
+                div { class: "card-stat",
+                    span { class: "card-stat-label", "Labels" }
+                    span { class: "dashboard-labels",
+                        for label in &pr.labels {
+                            span { class: "dashboard-label", "{label}" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn render_issue_detail(
+    issue: &IssueSummary,
+    repo: &str,
+    has_repo: bool,
+    state: &mut Signal<FetchState>,
+    updating_checkboxes: &mut Signal<HashSet<(u64, usize)>>,
+    toasts: &mut Signal<Vec<ToastMessage>>,
+    on_pick_issue: EventHandler<SessionSource>,
+) -> Element {
+    let issue_number = issue.number;
+    let checkboxes = issue
+        .body
+        .as_deref()
+        .map(parse_checkboxes)
+        .unwrap_or_default();
+
+    rsx! {
+        div { class: "card-detail",
+            if let Some((done, total)) = issue.task_progress {
+                {
+                    let pct = if total > 0 { done * 100 / total } else { 0 };
+                    rsx! {
+                        div { class: "card-stat",
+                            span { class: "card-stat-label", "Progress" }
+                            div { style: "display: flex; align-items: center; gap: 8px; flex: 1;",
+                                div { class: "task-progress-bar",
+                                    div {
+                                        class: "task-progress-fill",
+                                        style: "width: {pct}%",
+                                    }
+                                }
+                                span { class: "task-progress-text", "{done}/{total} done" }
+                            }
+                        }
+                    }
+                }
+            }
+            if !issue.labels.is_empty() {
+                div { class: "card-stat",
+                    span { class: "card-stat-label", "Labels" }
+                    span { class: "dashboard-labels",
+                        for label in &issue.labels {
+                            span { class: "dashboard-label", "{label}" }
+                        }
+                    }
+                }
+            }
+            if !issue.assignees.is_empty() {
+                div { class: "card-stat",
+                    span { class: "card-stat-label", "Assignees" }
+                    div { style: "display: flex; gap: 4px; flex-wrap: wrap;",
+                        for assignee in &issue.assignees {
+                            span { class: "assignee-badge", "{assignee}" }
+                        }
+                    }
+                }
+            }
+            if !checkboxes.is_empty() {
+                div { class: "card-stat", style: "flex-direction: column; align-items: flex-start;",
+                    span { class: "card-stat-label", "Tasks" }
+                    for cb in &checkboxes {
+                        {
+                            let line_idx = cb.line_index;
+                            let is_updating = updating_checkboxes.read().contains(&(issue_number, line_idx));
+                            let item_class = if is_updating { "checkbox-item checkbox-updating" } else { "checkbox-item" };
+                            let marker = if cb.checked { "[x]" } else { "[ ]" };
+                            let repo_str = repo.to_string();
+                            let state = *state;
+                            let mut updating_checkboxes = *updating_checkboxes;
+                            let mut toasts = *toasts;
+                            rsx! {
+                                div {
+                                    class: "{item_class}",
+                                    onclick: move |evt: Event<MouseData>| {
+                                        evt.stop_propagation();
+                                        if !has_repo || is_updating {
+                                            return;
+                                        }
+                                        let r = repo_str.clone();
+                                        updating_checkboxes.write().insert((issue_number, line_idx));
+                                        let mut state = state;
+                                        spawn(async move {
+                                            let new_body = {
+                                                let st = state.read();
+                                                if let FetchState::Loaded(ref data) = *st {
+                                                    data.open_issues.iter()
+                                                        .find(|i| i.number == issue_number)
+                                                        .and_then(|i| i.body.as_deref())
+                                                        .map(|b| toggle_checkbox_in_body(b, line_idx))
+                                                } else {
+                                                    None
+                                                }
+                                            };
+                                            if let Some(body) = new_body {
+                                                let body_clone = body.clone();
+                                                let result = tokio::task::spawn_blocking(move || {
+                                                    github::update_issue_body(&r, issue_number, &body_clone)
+                                                }).await;
+                                                updating_checkboxes.write().remove(&(issue_number, line_idx));
+                                                match result {
+                                                    Ok(Ok(())) => {
+                                                        if let FetchState::Loaded(ref mut data) = *state.write() {
+                                                            if let Some(issue) = data.open_issues.iter_mut().find(|i| i.number == issue_number) {
+                                                                issue.task_progress = fridi_core::project_overview::parse_task_progress(&body);
+                                                                issue.body = Some(body);
+                                                            }
+                                                        }
+                                                        push_toast(&mut toasts, "Task updated", ToastLevel::Success);
+                                                    }
+                                                    Ok(Err(e)) => {
+                                                        push_toast(&mut toasts, format!("Failed to update: {e}"), ToastLevel::Error);
+                                                    }
+                                                    Err(e) => {
+                                                        push_toast(&mut toasts, format!("Failed to update: {e}"), ToastLevel::Error);
+                                                    }
+                                                }
+                                            } else {
+                                                updating_checkboxes.write().remove(&(issue_number, line_idx));
+                                            }
+                                        });
+                                    },
+                                    span { "{marker}" }
+                                    span { "{cb.text}" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            div { class: "card-detail-actions",
+                button {
+                    class: "card-detail-btn",
+                    onclick: {
+                        let title = issue.title.clone();
+                        move |evt: Event<MouseData>| {
+                            evt.stop_propagation();
+                            on_pick_issue.call(SessionSource::Issue {
+                                number: issue_number,
+                                title: title.clone(),
+                            });
+                        }
+                    },
+                    "Analyze"
                 }
             }
         }
@@ -550,5 +924,139 @@ mod tests {
         assert_eq!(sync_detail(false, false, 45), "Updated 45s ago");
         assert_eq!(sync_detail(false, false, 130), "Stale \u{2014} 2m ago");
         assert_eq!(sync_detail(false, true, 10), "Last sync failed");
+    }
+
+    #[test]
+    fn parse_checkboxes_empty() {
+        let result = parse_checkboxes("No checkboxes here");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_checkboxes_mixed() {
+        let body = "- [x] done\n- [ ] todo\n- [X] also done\nsome text";
+        let result = parse_checkboxes(body);
+        assert_eq!(result.len(), 3);
+        assert!(result[0].checked);
+        assert_eq!(result[0].text, "done");
+        assert!(!result[1].checked);
+        assert_eq!(result[1].text, "todo");
+        assert!(result[2].checked);
+        assert_eq!(result[2].text, "also done");
+    }
+
+    #[test]
+    fn toggle_checkbox_unchecked_to_checked() {
+        let body = "- [ ] task 1\n- [ ] task 2";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "- [x] task 1\n- [ ] task 2");
+    }
+
+    #[test]
+    fn toggle_checkbox_checked_to_unchecked() {
+        let body = "- [x] task 1\n- [ ] task 2";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "- [ ] task 1\n- [ ] task 2");
+    }
+
+    #[test]
+    fn toggle_checkbox_preserves_indentation() {
+        let body = "  - [ ] indented task\n- [x] normal task";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "  - [x] indented task\n- [x] normal task");
+    }
+
+    #[test]
+    fn toggle_checkbox_uppercase_x() {
+        let body = "- [X] task";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "- [ ] task");
+    }
+
+    #[test]
+    fn parse_checkboxes_indented() {
+        let body = "  - [x] indented done\n  - [ ] indented todo";
+        let result = parse_checkboxes(body);
+        assert_eq!(result.len(), 2);
+        assert!(result[0].checked);
+        assert_eq!(result[0].text, "indented done");
+        assert!(!result[1].checked);
+        assert_eq!(result[1].text, "indented todo");
+    }
+
+    #[test]
+    fn parse_checkboxes_empty_body() {
+        let result = parse_checkboxes("");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_checkboxes_ignores_non_checkbox_lines() {
+        let body = "Some text\n- [x] real task\n- not a checkbox\n- [invalid] nope";
+        let result = parse_checkboxes(body);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].text, "real task");
+        assert_eq!(result[0].line_index, 1);
+    }
+
+    #[test]
+    fn toggle_checkbox_round_trip() {
+        let body = "- [ ] task\n- [x] done";
+        let toggled = toggle_checkbox_in_body(body, 0);
+        assert_eq!(toggled, "- [x] task\n- [x] done");
+        let back = toggle_checkbox_in_body(&toggled, 0);
+        assert_eq!(back, "- [ ] task\n- [x] done");
+    }
+
+    #[test]
+    fn toggle_checkbox_non_checkbox_line_unchanged() {
+        let body = "just text\n- [ ] task";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "just text\n- [ ] task");
+    }
+
+    #[test]
+    fn parse_checkboxes_tracks_line_indices() {
+        let body = "heading\n\n- [x] first\nsome text\n- [ ] second";
+        let result = parse_checkboxes(body);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].line_index, 2);
+        assert_eq!(result[1].line_index, 4);
+    }
+
+    #[test]
+    fn toggle_checkbox_preserves_trailing_newline() {
+        let body = "- [ ] task 1\n- [ ] task 2\n";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "- [x] task 1\n- [ ] task 2\n");
+    }
+
+    #[test]
+    fn toggle_checkbox_no_trailing_newline_stays_without() {
+        let body = "- [ ] task 1\n- [ ] task 2";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "- [x] task 1\n- [ ] task 2");
+    }
+
+    #[test]
+    fn parse_checkboxes_special_characters_in_text() {
+        let body = "- [x] task with `code` and **bold**\n- [ ] task with [link](url)";
+        let result = parse_checkboxes(body);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].text, "task with `code` and **bold**");
+        assert_eq!(result[1].text, "task with [link](url)");
+    }
+
+    #[test]
+    fn parse_checkboxes_only_whitespace_body() {
+        let result = parse_checkboxes("   \n  \n");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn toggle_checkbox_single_line_body() {
+        let body = "- [ ] only task";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "- [x] only task");
     }
 }
