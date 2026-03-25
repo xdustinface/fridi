@@ -33,6 +33,19 @@ pub struct PrSummary {
     pub ci_status: CiStatus,
     pub updated_at: String,
     pub labels: Vec<String>,
+    pub additions: u64,
+    pub deletions: u64,
+    pub changed_files: u64,
+    pub review_decision: Option<String>,
+    pub checks: Vec<CheckDetail>,
+    pub url: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CheckDetail {
+    pub name: String,
+    pub status: String,
+    pub conclusion: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -41,6 +54,10 @@ pub struct IssueSummary {
     pub title: String,
     pub labels: Vec<String>,
     pub updated_at: String,
+    pub body: Option<String>,
+    pub assignees: Vec<String>,
+    pub url: String,
+    pub task_progress: Option<(usize, usize)>,
 }
 
 #[derive(Debug, Clone)]
@@ -79,13 +96,34 @@ fn fetch_pr_summaries(repo: &str) -> Result<Vec<PrSummary>, GitHubError> {
     let prs = github::fetch_prs(repo)?;
     Ok(prs
         .into_iter()
-        .map(|pr| PrSummary {
-            number: pr.number,
-            title: pr.title,
-            branch: pr.head_ref_name,
-            ci_status: CiStatus::from_checks(&pr.status_check_rollup),
-            updated_at: pr.updated_at,
-            labels: pr.labels.into_iter().map(|l| l.name).collect(),
+        .map(|pr| {
+            let checks = pr
+                .status_check_rollup
+                .iter()
+                .map(|c| CheckDetail {
+                    name: c.name.clone().unwrap_or_default(),
+                    status: c.status.clone(),
+                    conclusion: if c.conclusion.is_empty() {
+                        None
+                    } else {
+                        Some(c.conclusion.clone())
+                    },
+                })
+                .collect();
+            PrSummary {
+                number: pr.number,
+                title: pr.title,
+                branch: pr.head_ref_name,
+                ci_status: CiStatus::from_checks(&pr.status_check_rollup),
+                updated_at: pr.updated_at,
+                labels: pr.labels.into_iter().map(|l| l.name).collect(),
+                additions: pr.additions.unwrap_or(0),
+                deletions: pr.deletions.unwrap_or(0),
+                changed_files: pr.changed_files.unwrap_or(0),
+                review_decision: pr.review_decision,
+                checks,
+                url: pr.url.unwrap_or_default(),
+            }
         })
         .collect())
 }
@@ -94,11 +132,27 @@ fn fetch_issue_summaries(repo: &str) -> Result<Vec<IssueSummary>, GitHubError> {
     let issues = github::fetch_issues(repo)?;
     Ok(issues
         .into_iter()
-        .map(|issue| IssueSummary {
-            number: issue.number,
-            title: issue.title,
-            labels: issue.labels.into_iter().map(|l| l.name).collect(),
-            updated_at: issue.updated_at,
+        .map(|issue| {
+            let task_progress = issue
+                .body
+                .as_deref()
+                .and_then(parse_task_progress);
+            let assignees = issue
+                .assignees
+                .unwrap_or_default()
+                .into_iter()
+                .map(|a| a.login)
+                .collect();
+            IssueSummary {
+                number: issue.number,
+                title: issue.title,
+                labels: issue.labels.into_iter().map(|l| l.name).collect(),
+                updated_at: issue.updated_at,
+                body: issue.body,
+                assignees,
+                url: issue.url.unwrap_or_default(),
+                task_progress,
+            }
         })
         .collect())
 }
@@ -172,6 +226,16 @@ fn count_running_sessions(store: &SessionStore) -> Result<usize, SessionStoreErr
         .count())
 }
 
+fn parse_task_progress(body: &str) -> Option<(usize, usize)> {
+    let checked = body.matches("- [x]").count() + body.matches("- [X]").count();
+    let unchecked = body.matches("- [ ]").count();
+    let total = checked + unchecked;
+    if total == 0 {
+        return None;
+    }
+    Some((checked, total))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -216,10 +280,12 @@ mod tests {
         use crate::github::StatusCheck;
         let checks = vec![
             StatusCheck {
+                name: None,
                 status: "completed".into(),
                 conclusion: "success".into(),
             },
             StatusCheck {
+                name: None,
                 status: "completed".into(),
                 conclusion: "success".into(),
             },
@@ -232,10 +298,12 @@ mod tests {
         use crate::github::StatusCheck;
         let checks = vec![
             StatusCheck {
+                name: None,
                 status: "completed".into(),
                 conclusion: "success".into(),
             },
             StatusCheck {
+                name: None,
                 status: "completed".into(),
                 conclusion: "failure".into(),
             },
@@ -248,10 +316,12 @@ mod tests {
         use crate::github::StatusCheck;
         let checks = vec![
             StatusCheck {
+                name: None,
                 status: "completed".into(),
                 conclusion: "success".into(),
             },
             StatusCheck {
+                name: None,
                 status: "in_progress".into(),
                 conclusion: "".into(),
             },
@@ -263,6 +333,7 @@ mod tests {
     fn test_ci_status_error_conclusion() {
         use crate::github::StatusCheck;
         let checks = vec![StatusCheck {
+            name: None,
             status: "completed".into(),
             conclusion: "error".into(),
         }];
@@ -273,6 +344,7 @@ mod tests {
     fn test_ci_status_queued_is_pending() {
         use crate::github::StatusCheck;
         let checks = vec![StatusCheck {
+            name: None,
             status: "queued".into(),
             conclusion: "".into(),
         }];
@@ -284,10 +356,12 @@ mod tests {
         use crate::github::StatusCheck;
         let checks = vec![
             StatusCheck {
+                name: None,
                 status: "completed".into(),
                 conclusion: "failure".into(),
             },
             StatusCheck {
+                name: None,
                 status: "in_progress".into(),
                 conclusion: "".into(),
             },
@@ -318,5 +392,28 @@ mod tests {
         store.save(&completed).unwrap();
 
         assert_eq!(super::count_running_sessions(&store).unwrap(), 1);
+    }
+
+    #[test]
+    fn test_parse_task_progress_none_when_empty() {
+        assert_eq!(parse_task_progress("No checkboxes here"), None);
+    }
+
+    #[test]
+    fn test_parse_task_progress_all_unchecked() {
+        let body = "- [ ] task 1\n- [ ] task 2\n- [ ] task 3";
+        assert_eq!(parse_task_progress(body), Some((0, 3)));
+    }
+
+    #[test]
+    fn test_parse_task_progress_mixed() {
+        let body = "- [x] done\n- [ ] todo\n- [X] also done";
+        assert_eq!(parse_task_progress(body), Some((2, 3)));
+    }
+
+    #[test]
+    fn test_parse_task_progress_all_checked() {
+        let body = "- [x] a\n- [X] b";
+        assert_eq!(parse_task_progress(body), Some((2, 2)));
     }
 }
