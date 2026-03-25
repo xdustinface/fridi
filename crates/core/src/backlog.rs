@@ -15,7 +15,17 @@ pub fn backlog_path() -> PathBuf {
         .filter(|o| o.status.success())
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| PathBuf::from(s.trim()))
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        .unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| {
+                let home = std::env::var("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| {
+                        eprintln!("warning: could not determine HOME or cwd, falling back to /tmp for backlog storage");
+                        PathBuf::from("/tmp")
+                    });
+                home
+            })
+        });
 
     root.join(".fridi/backlog.md")
 }
