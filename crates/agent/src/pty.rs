@@ -18,13 +18,21 @@ pub struct PtyResizer {
 
 impl PtyResizer {
     pub fn resize(&self, cols: u16, rows: u16) {
+        tracing::debug!(
+            "PtyResizer::resize called with cols={}, rows={}",
+            cols,
+            rows
+        );
         if let Ok(master) = self.master.try_lock() {
-            let _ = master.resize(PtySize {
+            let result = master.resize(PtySize {
                 rows,
                 cols,
                 pixel_width: 0,
                 pixel_height: 0,
             });
+            tracing::debug!("PtyResizer::resize result: {:?}", result);
+        } else {
+            tracing::warn!("PtyResizer::resize: failed to acquire master lock");
         }
     }
 }
@@ -38,13 +46,23 @@ fn resizer_registry() -> &'static std::sync::Mutex<HashMap<String, PtyResizer>> 
 /// Register a resizer handle for a step so the UI can look it up by name.
 pub fn register_resizer(id: &str, resizer: PtyResizer) {
     if let Ok(mut map) = resizer_registry().lock() {
+        tracing::debug!("register_resizer: registering key={:?}", id);
         map.insert(id.to_string(), resizer);
     }
 }
 
 /// Retrieve a previously registered resizer by step name.
 pub fn get_resizer(id: &str) -> Option<PtyResizer> {
-    resizer_registry().lock().ok()?.get(id).cloned()
+    let map = resizer_registry().lock().ok()?;
+    let keys: Vec<&String> = map.keys().collect();
+    let result = map.get(id).cloned();
+    tracing::debug!(
+        "get_resizer: lookup key={:?}, found={}, registry_keys={:?}",
+        id,
+        result.is_some(),
+        keys
+    );
+    result
 }
 
 /// Remove a resizer when it is no longer needed.

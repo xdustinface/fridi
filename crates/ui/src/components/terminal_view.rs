@@ -1,7 +1,6 @@
 use base64::Engine;
 use dioxus::prelude::*;
 use fridi_agent::pty;
-use serde::Deserialize;
 
 /// Hex-encodes the step name to produce a collision-free terminal element ID.
 /// Plain sanitization (replacing non-alphanumeric chars with `-`) would collide
@@ -13,12 +12,6 @@ fn terminal_id_for(step_name: &str) -> String {
         .map(|b| format!("{b:02x}"))
         .collect();
     format!("terminal-{hex}")
-}
-
-#[derive(Deserialize)]
-struct ResizeMsg {
-    cols: u16,
-    rows: u16,
 }
 
 #[component]
@@ -97,12 +90,16 @@ pub(crate) fn TerminalView(
                     term.open(el);
                     let fitAddon = new FitAddon.FitAddon();
                     term.loadAddon(fitAddon);
+                    if (!window.fridiTerminalSize) window.fridiTerminalSize = {{}};
                     function syncSize() {{
                         let p = el.parentElement;
                         if (p && p.clientWidth > 0 && p.clientHeight > 0) {{
                             el.style.width = p.clientWidth + 'px';
                             el.style.height = (p.clientHeight - el.offsetTop) + 'px';
                             fitAddon.fit();
+                            console.log('XTERM FIT: cols=' + term.cols + ' rows=' + term.rows);
+                            window.fridiTerminalSize['{tid}'] = {{ cols: term.cols, rows: term.rows }};
+                            console.log('XTERM SIZE SET:', JSON.stringify(window.fridiTerminalSize['{tid}']));
                             return true;
                         }}
                         return false;
@@ -123,42 +120,65 @@ pub(crate) fn TerminalView(
         });
     };
 
-    // Spawn a coroutine that listens for resize events from xterm.js and
-    // forwards them to the PTY via the global resizer registry.
+    // Coroutine that polls xterm size from a JS global and resizes the PTY.
     let resize_step = step_name.clone();
     let resize_tid = terminal_id.read().clone();
     use_coroutine(move |_: UnboundedReceiver<()>| {
         let step = resize_step.clone();
         let tid = resize_tid.clone();
         async move {
-            // Wait until the terminal is ready before installing the resize listener
+            tracing::info!("Resize coroutine started for step={}, tid={}", step, tid);
+            let mut last_cols: u16 = 0;
+            let mut last_rows: u16 = 0;
             loop {
-                if *terminal_ready.read() {
-                    break;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            }
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-            let mut eval = document::eval(&format!(
-                r#"
-                (function() {{
-                    let checkTerm = setInterval(() => {{
-                        let t = window.fridiTerminals['{tid}'];
-                        if (!t) return;
-                        clearInterval(checkTerm);
-                        dioxus.send(JSON.stringify({{ cols: t.cols, rows: t.rows }}));
-                        t.onResize(({{ cols, rows }}) => {{
-                            dioxus.send(JSON.stringify({{ cols, rows }}));
-                        }});
-                    }}, 50);
-                }})();
-                "#,
-            ));
-
-            while let Ok(json_str) = eval.recv::<String>().await {
-                if let Ok(msg) = serde_json::from_str::<ResizeMsg>(&json_str) {
-                    if let Some(resizer) = pty::get_resizer(&step) {
-                        resizer.resize(msg.cols, msg.rows);
+                let js = format!(
+                    "var s = window.fridiTerminalSize && window.fridiTerminalSize['{tid}']; \
+                     return s ? s.cols + ',' + s.rows : '';"
+                );
+                match document::eval(&js).await {
+                    Ok(val) => {
+                        tracing::debug!("Resize JS eval ok for tid={}: {:?}", tid, val);
+                        if let Some(s) = val.as_str() {
+                            let parts: Vec<&str> = s.split(',').collect();
+                            if parts.len() == 2 {
+                                if let (Ok(cols), Ok(rows)) =
+                                    (parts[0].parse::<u16>(), parts[1].parse::<u16>())
+                                {
+                                    if cols != last_cols || rows != last_rows {
+                                        last_cols = cols;
+                                        last_rows = rows;
+                                        tracing::info!(
+                                            "PTY resize: {}x{} for step {}",
+                                            cols,
+                                            rows,
+                                            step
+                                        );
+                                        match pty::get_resizer(&step) {
+                                            Some(resizer) => {
+                                                tracing::debug!(
+                                                    "Resizer found for step={}, calling resize",
+                                                    step
+                                                );
+                                                resizer.resize(cols, rows);
+                                            }
+                                            None => {
+                                                tracing::warn!(
+                                                    "No resizer found for step={}",
+                                                    step
+                                                );
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    tracing::warn!("Failed to parse resize values from {:?}", s);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Resize JS eval failed for tid={}: {:?}", tid, e);
                     }
                 }
             }

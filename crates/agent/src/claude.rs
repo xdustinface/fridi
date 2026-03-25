@@ -159,7 +159,7 @@ impl Agent for ClaudeAgent {
             tokio::time::sleep(Duration::from_millis(2000)).await;
             let result = pty.write_stdin(prompt.as_bytes()).await;
             let result = match result {
-                Ok(()) => pty.write_stdin(b"\n").await,
+                Ok(()) => pty.write_stdin(b"\r").await,
                 Err(e) => Err(e),
             };
             if let Err(e) = result {
