@@ -214,6 +214,30 @@ mod tests {
     }
 
     #[test]
+    fn test_default_config_model() {
+        let config = ClaudeAgentConfig::default();
+        assert_eq!(config.model, "claude-opus-4-6");
+    }
+
+    #[test]
+    fn test_default_config_skips_permissions() {
+        let config = ClaudeAgentConfig::default();
+        assert!(config.skip_permissions);
+    }
+
+    #[test]
+    fn test_default_config_binary() {
+        let config = ClaudeAgentConfig::default();
+        assert_eq!(config.binary, "claude");
+    }
+
+    #[test]
+    fn test_default_config_no_default_args() {
+        let config = ClaudeAgentConfig::default();
+        assert!(config.default_args.is_empty());
+    }
+
+    #[test]
     fn test_claude_agent_custom_config() {
         let config = ClaudeAgentConfig {
             binary: "/usr/local/bin/claude".to_string(),
