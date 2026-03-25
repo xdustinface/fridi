@@ -13,6 +13,7 @@ use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::home_dashboard::HomeDashboard;
 use crate::components::quick_capture::QuickCapture;
 use crate::components::session_creator::{SessionCreator, SessionSource};
+use crate::components::sidebar::Sidebar;
 use crate::components::tab_bar::TabBar;
 use crate::components::toast::{ToastContainer, ToastLevel, Toasts, push_toast};
 use crate::components::workflow_view::WorkflowView;
@@ -121,6 +122,7 @@ pub(crate) fn App() -> Element {
     let mut showing_creator = use_signal(|| false);
     let mut showing_quick_capture = use_signal(|| false);
     let mut pending_close_tab: Signal<Option<usize>> = use_signal(|| None);
+    let mut sidebar_pinned = use_signal(|| false);
 
     // Per-session engine event receivers and live state
     let mut engine_receivers: crate::engine_bridge::EngineReceivers = use_signal(HashMap::new);
@@ -164,6 +166,18 @@ pub(crate) fn App() -> Element {
         let tabs_read = tabs.read();
         if let Some(tab) = tabs_read.get(idx) {
             let repo_key = repo_for_select.clone().unwrap_or_default();
+            let mut ws = window_state.write();
+            ws.set_active(&repo_key, tab.session_id.as_str());
+            save_window_state(&ws);
+        }
+    };
+
+    let repo_for_sidebar_select = default_repo.clone();
+    let on_sidebar_select = move |idx: usize| {
+        active_pane.set(ActivePane::Session(idx));
+        let tabs_read = tabs.read();
+        if let Some(tab) = tabs_read.get(idx) {
+            let repo_key = repo_for_sidebar_select.clone().unwrap_or_default();
             let mut ws = window_state.write();
             ws.set_active(&repo_key, tab.session_id.as_str());
             save_window_state(&ws);
@@ -403,6 +417,8 @@ pub(crate) fn App() -> Element {
                             showing_quick_capture.set(false);
                         } else if *showing_creator.read() {
                             showing_creator.set(false);
+                        } else if *sidebar_pinned.read() {
+                            sidebar_pinned.set(false);
                         }
                     }
                     other => {
@@ -440,6 +456,12 @@ pub(crate) fn App() -> Element {
         showing_quick_capture.set(false);
     };
 
+    let main_content_class = if *sidebar_pinned.read() {
+        "main-content sidebar-pinned"
+    } else {
+        "main-content"
+    };
+
     rsx! {
         div { class: "app-layout",
             TabBar {
@@ -453,7 +475,14 @@ pub(crate) fn App() -> Element {
                 on_close: on_close_tab,
                 on_new: on_new_tab,
             }
-            div { class: "main-content",
+            Sidebar {
+                pinned: sidebar_pinned,
+                tabs: tabs.read().clone(),
+                active_session_idx: session_idx,
+                on_session_select: on_sidebar_select,
+                on_new_session: on_new_tab,
+            }
+            div { class: "{main_content_class}",
                 if is_home {
                     HomeDashboard {
                         key: "{default_repo.clone().unwrap_or_default()}",
