@@ -187,7 +187,9 @@ fn parse_checkboxes(body: &str) -> Vec<CheckboxLine> {
 }
 
 fn toggle_checkbox_in_body(body: &str, line_index: usize) -> String {
-    body.lines()
+    let had_trailing_newline = body.ends_with('\n');
+    let mut result: String = body
+        .lines()
         .enumerate()
         .map(|(i, line)| {
             if i == line_index {
@@ -208,7 +210,11 @@ fn toggle_checkbox_in_body(body: &str, line_index: usize) -> String {
             }
         })
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n");
+    if had_trailing_newline {
+        result.push('\n');
+    }
+    result
 }
 
 fn open_url(url: &str) {
@@ -1012,5 +1018,41 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].line_index, 2);
         assert_eq!(result[1].line_index, 4);
+    }
+
+    #[test]
+    fn toggle_checkbox_preserves_trailing_newline() {
+        let body = "- [ ] task 1\n- [ ] task 2\n";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "- [x] task 1\n- [ ] task 2\n");
+    }
+
+    #[test]
+    fn toggle_checkbox_no_trailing_newline_stays_without() {
+        let body = "- [ ] task 1\n- [ ] task 2";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "- [x] task 1\n- [ ] task 2");
+    }
+
+    #[test]
+    fn parse_checkboxes_special_characters_in_text() {
+        let body = "- [x] task with `code` and **bold**\n- [ ] task with [link](url)";
+        let result = parse_checkboxes(body);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].text, "task with `code` and **bold**");
+        assert_eq!(result[1].text, "task with [link](url)");
+    }
+
+    #[test]
+    fn parse_checkboxes_only_whitespace_body() {
+        let result = parse_checkboxes("   \n  \n");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn toggle_checkbox_single_line_body() {
+        let body = "- [ ] only task";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "- [x] only task");
     }
 }
