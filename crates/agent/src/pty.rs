@@ -13,6 +13,7 @@ pub struct PtyProcess {
     output_tx: broadcast::Sender<AgentOutput>,
     initial_rx: Option<broadcast::Receiver<AgentOutput>>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    master: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
     running: Arc<AtomicBool>,
     collected_output: Arc<Mutex<Vec<u8>>>,
     reader_handle: Option<tokio::task::JoinHandle<()>>,
@@ -31,8 +32,8 @@ impl PtyProcess {
         let pty_system = NativePtySystem::default();
         let pair = pty_system
             .openpty(PtySize {
-                rows: 24,
-                cols: 80,
+                rows: 50,
+                cols: 200,
                 pixel_width: 0,
                 pixel_height: 0,
             })
@@ -54,6 +55,8 @@ impl PtyProcess {
             .master
             .take_writer()
             .map_err(|e| AgentError::SpawnError(format!("failed to take PTY writer: {e}")))?;
+
+        let master = Arc::new(Mutex::new(pair.master));
 
         let (output_tx, initial_rx) = broadcast::channel(1024);
         let running = Arc::new(AtomicBool::new(true));
@@ -92,6 +95,7 @@ impl PtyProcess {
             output_tx,
             initial_rx: Some(initial_rx),
             writer: Arc::new(Mutex::new(writer)),
+            master,
             running,
             collected_output,
             reader_handle: Some(reader_handle),
@@ -113,6 +117,22 @@ impl PtyProcess {
         writer.write_all(data).map_err(AgentError::Io)?;
         writer.flush().map_err(AgentError::Io)?;
         Ok(())
+    }
+
+    pub async fn resize(&self, cols: u16, rows: u16) -> Result<(), AgentError> {
+        let master = self.master.clone();
+        tokio::task::spawn_blocking(move || {
+            let master = master.blocking_lock();
+            master.resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+        })
+        .await
+        .map_err(|e| AgentError::ExecutionError(format!("resize task failed: {e}")))?
+        .map_err(|e| AgentError::ExecutionError(format!("failed to resize PTY: {e}")))
     }
 
     pub async fn wait(&mut self) -> Result<i32, AgentError> {
