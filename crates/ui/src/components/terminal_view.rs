@@ -41,12 +41,17 @@ fn xterm_init_js(tid: &str) -> String {
             term.open(el);
             let fitAddon = new FitAddon.FitAddon();
             term.loadAddon(fitAddon);
+            let lastFitCols = 0;
+            let lastFitRows = 0;
+            let resizeCooldown = false;
             function syncSize() {{
                 let p = el.parentElement;
                 if (p && p.clientWidth > 0 && p.clientHeight > 0) {{
                     el.style.width = p.clientWidth + 'px';
                     el.style.height = (p.clientHeight - el.offsetTop) + 'px';
                     fitAddon.fit();
+                    lastFitCols = term.cols;
+                    lastFitRows = term.rows;
                     return true;
                 }}
                 return false;
@@ -57,7 +62,23 @@ fn xterm_init_js(tid: &str) -> String {
                 }}
             }}
             requestAnimationFrame(doFit);
-            new ResizeObserver(() => syncSize()).observe(el.parentElement);
+            new ResizeObserver(function() {{
+                if (resizeCooldown) return;
+                let p = el.parentElement;
+                if (!p || p.clientWidth <= 0 || p.clientHeight <= 0) return;
+                el.style.width = p.clientWidth + 'px';
+                el.style.height = (p.clientHeight - el.offsetTop) + 'px';
+                fitAddon.fit();
+                let newCols = term.cols;
+                let newRows = term.rows;
+                if (Math.abs(newCols - lastFitCols) <= 1 && Math.abs(newRows - lastFitRows) <= 1) {{
+                    return;
+                }}
+                lastFitCols = newCols;
+                lastFitRows = newRows;
+                resizeCooldown = true;
+                setTimeout(function() {{ resizeCooldown = false; }}, 500);
+            }}).observe(el.parentElement);
             window.fridiTerminals['{tid}'] = term;
         }})();
         "#,
@@ -109,12 +130,23 @@ pub(crate) fn TerminalView(
                     r#"
                     var t = window.fridiTerminals['{tid}'];
                     if (t) {{
+                        var lastSentCols = t.cols;
+                        var lastSentRows = t.rows;
                         dioxus.send({{ cols: t.cols, rows: t.rows }});
                         var resizeTimer = null;
+                        var sendCooldown = false;
                         t.onResize(function(size) {{
+                            if (sendCooldown) return;
+                            if (Math.abs(size.cols - lastSentCols) <= 1 && Math.abs(size.rows - lastSentRows) <= 1) {{
+                                return;
+                            }}
                             if (resizeTimer) clearTimeout(resizeTimer);
                             resizeTimer = setTimeout(function() {{
+                                lastSentCols = size.cols;
+                                lastSentRows = size.rows;
                                 dioxus.send({{ cols: size.cols, rows: size.rows }});
+                                sendCooldown = true;
+                                setTimeout(function() {{ sendCooldown = false; }}, 500);
                             }}, 150);
                         }});
                     }}
