@@ -211,16 +211,6 @@ fn toggle_checkbox_in_body(body: &str, line_index: usize) -> String {
         .join("\n")
 }
 
-fn compute_task_progress(body: &str) -> Option<(usize, usize)> {
-    let checked = body.matches("- [x]").count() + body.matches("- [X]").count();
-    let unchecked = body.matches("- [ ]").count();
-    let total = checked + unchecked;
-    if total == 0 {
-        return None;
-    }
-    Some((checked, total))
-}
-
 fn open_url(url: &str) {
     if !url.starts_with("https://") {
         return;
@@ -779,7 +769,7 @@ fn render_issue_detail(
                                                     Ok(Ok(())) => {
                                                         if let FetchState::Loaded(ref mut data) = *state.write() {
                                                             if let Some(issue) = data.open_issues.iter_mut().find(|i| i.number == issue_number) {
-                                                                issue.task_progress = compute_task_progress(&body);
+                                                                issue.task_progress = fridi_core::project_overview::parse_task_progress(&body);
                                                                 issue.body = Some(body);
                                                             }
                                                         }

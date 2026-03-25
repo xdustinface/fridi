@@ -223,7 +223,7 @@ fn count_running_sessions(store: &SessionStore) -> Result<usize, SessionStoreErr
         .count())
 }
 
-fn parse_task_progress(body: &str) -> Option<(usize, usize)> {
+pub fn parse_task_progress(body: &str) -> Option<(usize, usize)> {
     let checked = body.matches("- [x]").count() + body.matches("- [X]").count();
     let unchecked = body.matches("- [ ]").count();
     let total = checked + unchecked;
