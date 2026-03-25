@@ -39,31 +39,30 @@ impl ToastLevel {
 
 #[derive(Clone)]
 pub(crate) struct ToastMessage {
-    pub id: u64,
-    pub message: String,
-    pub level: ToastLevel,
-    pub created_at: Instant,
+    pub(crate) id: u64,
+    pub(crate) message: String,
+    pub(crate) level: ToastLevel,
+    pub(crate) created_at: Instant,
     /// Set when the toast starts its exit animation.
-    pub exiting: bool,
+    pub(crate) exiting: bool,
 }
 
 /// Shared toast state provided via Dioxus context.
 #[derive(Clone, Copy)]
-pub(crate) struct Toasts(pub Signal<Vec<ToastMessage>>);
+pub(crate) struct Toasts(pub(crate) Signal<Vec<ToastMessage>>);
 
 /// Allocate the next unique toast id.
-pub(crate) fn next_toast_id() -> u64 {
+fn next_toast_id() -> u64 {
     NEXT_TOAST_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Push a new toast into the given signal.
-#[allow(dead_code)]
 pub(crate) fn push_toast(
     toasts: &mut Signal<Vec<ToastMessage>>,
     message: impl Into<String>,
     level: ToastLevel,
 ) {
-    let id = NEXT_TOAST_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let id = next_toast_id();
     toasts.write().push(ToastMessage {
         id,
         message: message.into(),

@@ -5,7 +5,7 @@ use fridi_core::session::Session;
 
 use crate::components::step_card::StepCard;
 use crate::components::terminal_view::TerminalView;
-use crate::components::toast::{ToastLevel, ToastMessage, Toasts, next_toast_id};
+use crate::components::toast::{ToastLevel, Toasts, push_toast};
 use crate::engine_bridge::SessionLiveState;
 
 /// Information about the currently selected step, used by the terminal view.
@@ -183,13 +183,7 @@ pub(crate) fn WorkflowView(session: Session, live_state: Option<SessionLiveState
                 } else {
                     ToastLevel::Warning
                 };
-                toasts.write().push(ToastMessage {
-                    id: next_toast_id(),
-                    message: msg.clone(),
-                    level,
-                    created_at: std::time::Instant::now(),
-                    exiting: false,
-                });
+                push_toast(&mut toasts, msg.clone(), level);
             }
             shown_count.set(notifications.len());
         }
