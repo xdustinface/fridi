@@ -16,6 +16,7 @@ use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::sidebar::Sidebar;
 use crate::components::tab_bar::TabBar;
 use crate::components::toast::{ToastContainer, ToastLevel, Toasts, push_toast};
+use crate::components::welcome_screen::{WelcomeScreen, recent_repos_from_state};
 use crate::components::workflow_view::WorkflowView;
 use crate::engine_bridge::use_engine_events;
 use crate::state::{self, TabInfo};
@@ -508,7 +509,10 @@ pub(crate) fn App() -> Element {
                         }
                     }
                 } else {
-                    div { class: "empty-state", "Click + to start a new session" }
+                    WelcomeScreen {
+                        repos: recent_repos_from_state(&window_state.read()),
+                        on_new_session: on_new_tab,
+                    }
                 }
             }
             if *showing_creator.read() {

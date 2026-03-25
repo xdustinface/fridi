@@ -1867,4 +1867,115 @@ body {
 .main-content.sidebar-pinned {
     margin-left: 280px;
 }
+
+/* Welcome screen */
+.welcome-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: var(--space-8);
+}
+
+.welcome-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-5);
+    background-color: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) 48px;
+    min-width: 360px;
+    max-width: 480px;
+}
+
+.welcome-logo {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+}
+
+.welcome-tagline {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: calc(-1 * var(--space-3));
+}
+
+.welcome-section {
+    width: 100%;
+}
+
+.welcome-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--space-2);
+}
+
+.welcome-repo-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.welcome-repo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    transition: background-color var(--transition-normal), border-color var(--transition-normal);
+}
+
+.welcome-repo-row:hover {
+    background-color: var(--surface-2);
+    border-color: var(--border-default);
+}
+
+.welcome-repo-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.welcome-repo-meta {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.welcome-actions {
+    width: 100%;
+    display: flex;
+    gap: var(--space-3);
+}
+
+.welcome-btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color var(--transition-normal);
+}
+
+.welcome-btn.primary {
+    background-color: var(--accent);
+    border: none;
+    color: var(--text-primary);
+}
+
+.welcome-btn.primary:hover {
+    background-color: var(--accent-hover);
+}
+
+.welcome-hint {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
 "#;
