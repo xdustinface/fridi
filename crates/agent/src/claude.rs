@@ -7,7 +7,7 @@ use tokio::sync::broadcast;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::pty::PtyProcess;
+use crate::pty::{PtyProcess, PtyResizer};
 use crate::traits::{Agent, AgentConfig, AgentError, AgentHandle, AgentOutput};
 
 /// Environment variables forwarded to spawned Claude CLI processes.
@@ -199,6 +199,8 @@ impl AgentHandle for ClaudeAgentHandle {
     fn collected_output(&self) -> String { self.pty.collected_output_sync() }
 
     fn session_id(&self) -> Option<&str> { Some(&self.session_id) }
+
+    fn resizer(&self) -> Option<PtyResizer> { Some(self.pty.resizer()) }
 }
 
 #[cfg(test)]

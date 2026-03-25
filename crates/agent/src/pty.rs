@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use strip_ansi_escapes::strip as strip_ansi;
@@ -8,6 +9,50 @@ use tokio::sync::{Mutex, broadcast};
 use tracing::{debug, error};
 
 use crate::traits::{AgentError, AgentOutput};
+
+/// Handle that allows resizing a PTY from any thread.
+#[derive(Clone)]
+pub struct PtyResizer {
+    master: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
+}
+
+impl PtyResizer {
+    pub fn resize(&self, cols: u16, rows: u16) {
+        if let Ok(master) = self.master.try_lock() {
+            let _ = master.resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            });
+        }
+    }
+}
+
+static RESIZERS: OnceLock<std::sync::Mutex<HashMap<String, PtyResizer>>> = OnceLock::new();
+
+fn resizer_registry() -> &'static std::sync::Mutex<HashMap<String, PtyResizer>> {
+    RESIZERS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
+/// Register a resizer handle for a step so the UI can look it up by name.
+pub fn register_resizer(id: &str, resizer: PtyResizer) {
+    if let Ok(mut map) = resizer_registry().lock() {
+        map.insert(id.to_string(), resizer);
+    }
+}
+
+/// Retrieve a previously registered resizer by step name.
+pub fn get_resizer(id: &str) -> Option<PtyResizer> {
+    resizer_registry().lock().ok()?.get(id).cloned()
+}
+
+/// Remove a resizer when it is no longer needed.
+pub fn remove_resizer(id: &str) {
+    if let Ok(mut map) = resizer_registry().lock() {
+        map.remove(id);
+    }
+}
 
 pub struct PtyProcess {
     output_tx: broadcast::Sender<AgentOutput>,
@@ -32,8 +77,8 @@ impl PtyProcess {
         let pty_system = NativePtySystem::default();
         let pair = pty_system
             .openpty(PtySize {
-                rows: 40,
-                cols: 150,
+                rows: 24,
+                cols: 80,
                 pixel_width: 0,
                 pixel_height: 0,
             })
@@ -101,6 +146,13 @@ impl PtyProcess {
             reader_handle: Some(reader_handle),
             child: Arc::new(Mutex::new(child)),
         })
+    }
+
+    /// Returns a cloneable handle for resizing this PTY from any thread.
+    pub fn resizer(&self) -> PtyResizer {
+        PtyResizer {
+            master: self.master.clone(),
+        }
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> { self.output_tx.subscribe() }

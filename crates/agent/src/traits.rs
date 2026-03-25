@@ -5,6 +5,8 @@ use serde_json::Value as JsonValue;
 use thiserror::Error;
 use tokio::sync::broadcast;
 
+use crate::pty::PtyResizer;
+
 #[derive(Debug, Error)]
 pub enum AgentError {
     #[error("failed to spawn agent: {0}")]
@@ -54,6 +56,8 @@ pub trait AgentHandle: Send + Sync {
     fn is_running(&self) -> bool;
     fn collected_output(&self) -> String;
     fn session_id(&self) -> Option<&str>;
+    /// Returns a handle for resizing the underlying PTY, if applicable.
+    fn resizer(&self) -> Option<PtyResizer> { None }
 }
 
 #[async_trait]

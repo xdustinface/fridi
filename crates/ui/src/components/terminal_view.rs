@@ -1,5 +1,7 @@
 use base64::Engine;
 use dioxus::prelude::*;
+use fridi_agent::pty;
+use serde::Deserialize;
 
 /// Hex-encodes the step name to produce a collision-free terminal element ID.
 /// Plain sanitization (replacing non-alphanumeric chars with `-`) would collide
@@ -11,6 +13,12 @@ fn terminal_id_for(step_name: &str) -> String {
         .map(|b| format!("{b:02x}"))
         .collect();
     format!("terminal-{hex}")
+}
+
+#[derive(Deserialize)]
+struct ResizeMsg {
+    cols: u16,
+    rows: u16,
 }
 
 #[component]
@@ -114,6 +122,48 @@ pub(crate) fn TerminalView(
             terminal_ready.set(true);
         });
     };
+
+    // Spawn a coroutine that listens for resize events from xterm.js and
+    // forwards them to the PTY via the global resizer registry.
+    let resize_step = step_name.clone();
+    let resize_tid = terminal_id.read().clone();
+    use_coroutine(move |_: UnboundedReceiver<()>| {
+        let step = resize_step.clone();
+        let tid = resize_tid.clone();
+        async move {
+            // Wait until the terminal is ready before installing the resize listener
+            loop {
+                if *terminal_ready.read() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+
+            let mut eval = document::eval(&format!(
+                r#"
+                (function() {{
+                    let checkTerm = setInterval(() => {{
+                        let t = window.fridiTerminals['{tid}'];
+                        if (!t) return;
+                        clearInterval(checkTerm);
+                        dioxus.send(JSON.stringify({{ cols: t.cols, rows: t.rows }}));
+                        t.onResize(({{ cols, rows }}) => {{
+                            dioxus.send(JSON.stringify({{ cols, rows }}));
+                        }});
+                    }}, 50);
+                }})();
+                "#,
+            ));
+
+            while let Ok(json_str) = eval.recv::<String>().await {
+                if let Ok(msg) = serde_json::from_str::<ResizeMsg>(&json_str) {
+                    if let Some(resizer) = pty::get_resizer(&step) {
+                        resizer.resize(msg.cols, msg.rows);
+                    }
+                }
+            }
+        }
+    });
 
     // Write new output data to the xterm instance (only the delta since last write).
     let current_len = output.len();

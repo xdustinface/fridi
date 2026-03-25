@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use fridi_agent::claude::{ClaudeAgent, ClaudeAgentConfig};
 use fridi_agent::definition::{AgentDefinition, TemplateContext, interpolate_prompt};
+use fridi_agent::pty;
 use fridi_agent::traits::{Agent, AgentConfig, AgentOutput};
 use fridi_core::engine::{AgentSpawner, EngineEvent, StepResult, WorkflowContext};
 use fridi_core::github::detect_repo_in;
@@ -169,6 +170,11 @@ impl AgentSpawner for OrchestratorSpawner {
             let agent = ClaudeAgent::new(agent_config);
             let mut handle = agent.spawn(config).await.map_err(|e| e.to_string())?;
 
+            // Register PTY resizer so the UI can resize the terminal
+            if let Some(resizer) = handle.resizer() {
+                pty::register_resizer(&step_name, resizer);
+            }
+
             // Forward PTY output to engine events if a sender is available.
             // Use the pre-subscribed receiver to avoid missing output emitted
             // between spawn and subscribe.
@@ -191,6 +197,8 @@ impl AgentSpawner for OrchestratorSpawner {
             });
 
             let exit_code = handle.wait().await.map_err(|e| e.to_string())?;
+
+            pty::remove_resizer(&step_name);
 
             // Wait for the forwarder to finish draining
             if let Some(handle) = forwarder {
