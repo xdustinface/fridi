@@ -5,7 +5,7 @@ models:
 
 auto_review: true
 auto_approve: true
-review_passes: 3
+review_passes: 1
 
 exclude_paths:
   - "*.lock"
