@@ -267,22 +267,33 @@ pub fn auto_pick_issue(repo: &str) -> Result<Option<GitHubIssue>, GitHubError> {
     Ok(Some(priority_issue.unwrap_or(&issues[0]).clone()))
 }
 
-pub fn update_issue_body(repo: &str, issue_number: u64, new_body: &str) -> Result<(), String> {
-    let output = Command::new("gh")
+pub fn update_issue_body(repo: &str, issue_number: u64, new_body: &str) -> Result<(), GitHubError> {
+    use std::io::Write;
+
+    let payload = serde_json::json!({ "body": new_body }).to_string();
+    let mut child = Command::new("gh")
         .args([
             "api",
             "-X",
             "PATCH",
             &format!("repos/{repo}/issues/{issue_number}"),
-            "-f",
-            &format!("body={new_body}"),
+            "--input",
+            "-",
         ])
-        .output()
-        .map_err(|e| format!("failed to run gh: {e}"))?;
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
 
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(payload.as_bytes());
+    }
+
+    let output = child.wait_with_output()?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("gh api failed: {stderr}"));
+        return Err(GitHubError::NonZero {
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        });
     }
 
     Ok(())
