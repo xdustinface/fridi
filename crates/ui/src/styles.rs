@@ -1041,12 +1041,12 @@ body {
 /* Sync status pill button */
 .sync-status {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 6px;
     cursor: pointer;
     align-self: flex-end;
-    padding: 5px 10px;
-    min-width: 140px;
+    padding: 4px 10px;
+    min-width: 120px;
     background-color: var(--surface-2);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
@@ -1067,7 +1067,6 @@ body {
     height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
-    margin-top: 3px;
 }
 
 .sync-dot.success { background-color: var(--accent); }
