@@ -5,6 +5,7 @@ use fridi_core::session::Session;
 
 use crate::components::step_card::StepCard;
 use crate::components::terminal_view::TerminalView;
+use crate::components::toast::{ToastLevel, Toasts, push_toast};
 use crate::engine_bridge::SessionLiveState;
 
 /// Information about the currently selected step, used by the terminal view.
@@ -17,6 +18,7 @@ struct SelectedStepInfo {
 
 #[component]
 pub(crate) fn WorkflowView(session: Session, live_state: Option<SessionLiveState>) -> Element {
+    let mut toasts = use_context::<Toasts>().0;
     let mut selected_step = use_signal(|| Option::<String>::None);
 
     let workflow =
@@ -156,18 +158,37 @@ pub(crate) fn WorkflowView(session: Session, live_state: Option<SessionLiveState
         }
     });
 
+    // Track how many notifications we have already shown so we only fire each
+    // notification once. Reset when the session changes.
+    let mut shown_count = use_signal(|| 0usize);
+    let mut prev_session_id = use_signal(|| session.id.clone());
+    if *prev_session_id.read() != session.id {
+        prev_session_id.set(session.id.clone());
+        shown_count.set(0);
+    }
+
     let notifications: Vec<String> = live_state
         .as_ref()
         .map(|ls| ls.notifications.clone())
         .unwrap_or_default();
 
+    let already_shown = *shown_count.read();
+    if notifications.len() > already_shown {
+        for msg in &notifications[already_shown..] {
+            let level = if msg.starts_with("Failed:") {
+                ToastLevel::Error
+            } else {
+                ToastLevel::Warning
+            };
+            push_toast(&mut toasts, msg.clone(), level);
+        }
+        shown_count.set(notifications.len());
+    }
+
     rsx! {
         crate::components::split_pane::SplitPane {
             top: dag_view,
             bottom: terminal,
-        }
-        if !notifications.is_empty() {
-            NotificationBar { notifications }
         }
     }
 }
@@ -179,16 +200,5 @@ fn format_status(status: &StepStatus) -> String {
         StepStatus::Completed => "Completed".to_string(),
         StepStatus::Failed(reason) => format!("Failed: {reason}"),
         StepStatus::Skipped => "Skipped".to_string(),
-    }
-}
-
-#[component]
-fn NotificationBar(notifications: Vec<String>) -> Element {
-    rsx! {
-        div { class: "notification-bar",
-            for (i, msg) in notifications.iter().enumerate() {
-                div { key: "{i}", class: "notification-item", "{msg}" }
-            }
-        }
     }
 }

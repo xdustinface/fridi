@@ -13,6 +13,7 @@ use crate::components::home_dashboard::HomeDashboard;
 use crate::components::quick_capture::QuickCapture;
 use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::tab_bar::TabBar;
+use crate::components::toast::{ToastContainer, ToastLevel, Toasts, push_toast};
 use crate::components::workflow_view::WorkflowView;
 use crate::engine_bridge::use_engine_events;
 use crate::state::{self, TabInfo};
@@ -36,6 +37,10 @@ pub(crate) struct DetectedRepo(pub(crate) Option<String>);
 
 #[component]
 pub(crate) fn App() -> Element {
+    // Global toast notification state
+    let toast_signal = use_signal(Vec::new);
+    use_context_provider(|| Toasts(toast_signal));
+
     let workflows_dir = PathBuf::from("./workflows");
     let workflows = use_signal(|| state::load_workflows(&workflows_dir));
 
@@ -196,6 +201,8 @@ pub(crate) fn App() -> Element {
         showing_creator.set(true);
     };
 
+    let mut toasts = use_context::<Toasts>();
+
     let create_session = {
         let default_repo = default_repo.clone();
         move |source: SessionSource| {
@@ -278,6 +285,12 @@ pub(crate) fn App() -> Element {
                     }
                 }
             });
+
+            push_toast(
+                &mut toasts.0,
+                format!("Session started: {context_label}"),
+                ToastLevel::Info,
+            );
 
             let tab = TabInfo {
                 session_id: session_id.clone(),
@@ -484,6 +497,7 @@ pub(crate) fn App() -> Element {
                     on_dismiss: on_dismiss_quick_capture,
                 }
             }
+            ToastContainer {}
         }
     }
 }
