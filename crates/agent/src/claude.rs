@@ -41,6 +41,8 @@ pub struct ClaudeAgentConfig {
     pub default_args: Vec<String>,
     /// Model to use (passed via `--model`)
     pub model: String,
+    /// Pass `--dangerously-skip-permissions` to the CLI (defaults to `true`)
+    pub skip_permissions: bool,
 }
 
 impl Default for ClaudeAgentConfig {
@@ -49,6 +51,7 @@ impl Default for ClaudeAgentConfig {
             binary: "claude".to_string(),
             default_args: Vec::new(),
             model: "claude-opus-4-6".to_string(),
+            skip_permissions: true,
         }
     }
 }
@@ -80,7 +83,10 @@ impl Agent for ClaudeAgent {
 
         cmd.arg("--model");
         cmd.arg(&self.config.model);
-        cmd.arg("--dangerously-skip-permissions");
+
+        if self.config.skip_permissions {
+            cmd.arg("--dangerously-skip-permissions");
+        }
 
         // Resolve the session ID: use provided or generate a new one
         let session_id = config
@@ -146,8 +152,9 @@ impl Agent for ClaudeAgent {
         let mut pty = PtyProcess::spawn_async(cmd).await?;
 
         // Send the prompt via PTY stdin instead of passing it as a CLI arg.
-        // A brief delay lets the Claude CLI finish initializing before
-        // receiving input.
+        // TODO: replace this fixed delay with a readiness signal from the CLI.
+        // The sleep is a workaround because the Claude CLI needs time to
+        // initialize before it can accept stdin input.
         if let Some(prompt) = prompt {
             tokio::time::sleep(Duration::from_millis(2000)).await;
             let result = pty.write_stdin(prompt.as_bytes()).await;
