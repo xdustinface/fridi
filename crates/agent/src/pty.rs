@@ -32,8 +32,8 @@ impl PtyProcess {
         let pty_system = NativePtySystem::default();
         let pair = pty_system
             .openpty(PtySize {
-                rows: 50,
-                cols: 200,
+                rows: 30,
+                cols: 120,
                 pixel_width: 0,
                 pixel_height: 0,
             })
