@@ -116,6 +116,9 @@ pub(crate) fn TerminalView(
                 "#,
             );
             let _ = document::eval(&js).await;
+            // Reset written_len so all buffered output is replayed into the
+            // fresh xterm instance (signals persist across re-mounts).
+            written_len.set(0);
             terminal_ready.set(true);
         });
     };

@@ -1,12 +1,11 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
-use fridi_core::engine::EngineEvent;
 use fridi_core::schema::interpolate_with_repo;
 use fridi_core::session::{Session, SessionId, SessionStore};
 use fridi_core::window_state::WindowState;
 use serde_yaml::to_string as to_yaml;
-use tokio::sync::broadcast;
 use tracing::error;
 
 use crate::components::backlog_tab::BacklogTab;
@@ -108,9 +107,9 @@ pub(crate) fn App() -> Element {
     let mut showing_creator = use_signal(|| false);
     let mut showing_quick_capture = use_signal(|| false);
 
-    // Engine event bridge: receiver is set when a workflow starts
-    let mut engine_rx: Signal<Option<broadcast::Receiver<EngineEvent>>> = use_signal(|| None);
-    let live_state = use_engine_events(engine_rx);
+    // Per-session engine event receivers and live state
+    let mut engine_receivers: crate::engine_bridge::EngineReceivers = use_signal(HashMap::new);
+    let mut live_states = use_engine_events(engine_receivers);
 
     // Workflow runner for starting engine executions in background tasks
     let runner =
@@ -160,8 +159,13 @@ pub(crate) fn App() -> Element {
     let on_close_tab = move |idx: usize| {
         let mut t = tabs.write();
         if idx < t.len() {
-            let closed_session_id = t[idx].session_id.as_str().to_string();
+            let closed_sid = t[idx].session_id.clone();
+            let closed_session_id = closed_sid.as_str().to_string();
             t.remove(idx);
+
+            // Clean up per-session engine state
+            engine_receivers.write().remove(&closed_sid);
+            live_states.write().remove(&closed_sid);
             let len = t.len();
 
             // Persist tab removal
@@ -260,13 +264,14 @@ pub(crate) fn App() -> Element {
             let runner_clone = runner.read().clone();
             let session_clone = session.clone();
             let store_clone = current_store;
+            let sid = session_id.clone();
             spawn(async move {
                 match runner_clone
                     .start(workflow, session_clone, store_clone)
                     .await
                 {
                     Ok(rx) => {
-                        engine_rx.set(Some(rx));
+                        engine_receivers.write().insert(sid, rx);
                     }
                     Err(e) => {
                         eprintln!("failed to start workflow execution: {e}");
@@ -362,9 +367,17 @@ pub(crate) fn App() -> Element {
                 } else if is_backlog {
                     BacklogTab {}
                 } else if let Some(session) = active_session {
-                    WorkflowView {
-                        session,
-                        live_state: Some(live_state.read().clone()),
+                    {
+                        let session_live = live_states
+                            .read()
+                            .get(&session.id)
+                            .cloned();
+                        rsx! {
+                            WorkflowView {
+                                session,
+                                live_state: session_live,
+                            }
+                        }
                     }
                 } else {
                     div { class: "empty-state", "Click + to start a new session" }
