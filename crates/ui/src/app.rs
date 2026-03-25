@@ -315,23 +315,20 @@ pub(crate) fn App() -> Element {
         session_idx.and_then(|idx| tabs_read.get(idx).map(|tab| tab.workflow_name.clone()))
     };
 
-    // Poll global JS flag for Cmd+B quick capture toggle
+    // Listen for Cmd+B / Ctrl+B via dioxus.send from a global keydown handler
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            let result = document::eval(
-                r#"
-                let val = window.fridiToggleQuickCapture || false;
-                if (val) { window.fridiToggleQuickCapture = false; }
-                val
-                "#,
-            )
-            .await;
-            if let Ok(val) = result {
-                if val.as_bool().unwrap_or(false) {
-                    showing_quick_capture.toggle();
+        let mut eval = document::eval(
+            r#"
+            document.addEventListener('keydown', function(e) {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+                    e.preventDefault();
+                    dioxus.send('toggle');
                 }
-            }
+            });
+            "#,
+        );
+        while eval.recv::<String>().await.is_ok() {
+            showing_quick_capture.toggle();
         }
     });
 
