@@ -107,7 +107,15 @@ fn build_display_items(backlog: &Backlog) -> Vec<DisplayItem> {
 #[component]
 pub(crate) fn BacklogTab() -> Element {
     let backlog_path = PathBuf::from(BACKLOG_FILE);
-    let mut backlog = use_signal(|| Backlog::load(&backlog_path).expect("backlog path is valid"));
+    let mut backlog = use_signal(|| {
+        Backlog::load(&backlog_path).unwrap_or_else(|e| {
+            error!(
+                "failed to load backlog from {}: {e}",
+                backlog_path.display()
+            );
+            Backlog::empty(&backlog_path)
+        })
+    });
     let mut input_text = use_signal(String::new);
 
     let display_items = use_memo(move || build_display_items(&backlog.read()));

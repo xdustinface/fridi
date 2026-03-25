@@ -70,15 +70,20 @@ pub struct Backlog {
 }
 
 impl Backlog {
+    /// Create an empty backlog that will save to the given path.
+    pub fn empty(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            items: Vec::new(),
+        }
+    }
+
     /// Load a backlog from the given file path. Returns an empty backlog if the
     /// file does not exist.
     pub fn load(path: impl Into<PathBuf>) -> Result<Self, BacklogError> {
         let path = path.into();
         if !path.exists() {
-            return Ok(Self {
-                path,
-                items: Vec::new(),
-            });
+            return Ok(Self::empty(path));
         }
 
         let content = fs::read_to_string(&path)?;
@@ -139,7 +144,9 @@ impl Backlog {
     }
 
     /// Return a slice of all items.
-    pub fn items(&self) -> &[BacklogItem] { &self.items }
+    pub fn items(&self) -> &[BacklogItem] {
+        &self.items
+    }
 }
 
 /// Extract `#tag` tokens from text. Operates on raw bytes for performance;
@@ -174,7 +181,9 @@ fn extract_tags(text: &str) -> Vec<String> {
     tags
 }
 
-fn is_tag_char(b: u8) -> bool { b.is_ascii_alphanumeric() || b == b'_' || b == b'-' }
+fn is_tag_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
+}
 
 /// Sanitize a metadata field value for safe embedding in HTML comments.
 /// Replaces spaces with hyphens (to avoid breaking `rfind(' ')` parsing)
