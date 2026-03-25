@@ -122,6 +122,8 @@ impl AgentSpawner for OrchestratorSpawner {
             let session_dir_str = orch.session_dir().to_string_lossy().to_string();
             drop(orch);
 
+            let mcp_socket_exists = std::path::Path::new(&mcp_socket_path).exists();
+
             let template_ctx = TemplateContext {
                 repo,
                 session_id: session_id_str,
@@ -142,6 +144,14 @@ impl AgentSpawner for OrchestratorSpawner {
                     .map(|def| def.default_args.join(" "))
             });
 
+            // Only pass the MCP config if the socket file actually exists,
+            // otherwise Claude CLI will fail trying to connect.
+            let mcp_config = if mcp_socket_exists {
+                Some(mcp_config_path.to_string_lossy().into())
+            } else {
+                None
+            };
+
             let config = AgentConfig {
                 agent_type: agent_type.clone(),
                 skill: step_clone.skill.clone(),
@@ -153,7 +163,7 @@ impl AgentSpawner for OrchestratorSpawner {
                 session_id: None,
                 resume: false,
                 session_name: Some(step_name.clone()),
-                mcp_config: Some(mcp_config_path.to_string_lossy().into()),
+                mcp_config,
             };
 
             let agent = ClaudeAgent::new(agent_config);
