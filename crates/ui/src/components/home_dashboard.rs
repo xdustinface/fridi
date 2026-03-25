@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 use dioxus::prelude::*;
 use fridi_core::github::{self, CiStatus};
@@ -7,6 +8,8 @@ use fridi_core::project_overview::ProjectOverview;
 use fridi_core::session::SessionStore;
 
 use crate::components::session_creator::SessionSource;
+
+static CACHED_OVERVIEW: OnceLock<Mutex<Option<ProjectOverview>>> = OnceLock::new();
 
 const SESSIONS_DIR: &str = ".fridi/sessions";
 const POLL_INTERVAL_SECS: u64 = 60;
@@ -86,7 +89,14 @@ pub(crate) fn HomeDashboard(
     on_show_pr_picker: EventHandler<()>,
     on_show_creator: EventHandler<()>,
 ) -> Element {
-    let mut state = use_signal(|| FetchState::Loading);
+    let initial_state = {
+        let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
+        match cache.lock().unwrap().clone() {
+            Some(data) => FetchState::Loaded(data),
+            None => FetchState::Loading,
+        }
+    };
+    let mut state = use_signal(|| initial_state);
     let mut pick_state = use_signal(|| PickState::Idle);
     let mut removing_labels: Signal<HashSet<u64>> = use_signal(HashSet::new);
     let repo_clone = repo.clone();
@@ -112,7 +122,11 @@ pub(crate) fn HomeDashboard(
                 };
 
                 match overview {
-                    Ok(Ok(data)) => state.set(FetchState::Loaded(data)),
+                    Ok(Ok(data)) => {
+                        let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
+                        *cache.lock().unwrap() = Some(data.clone());
+                        state.set(FetchState::Loaded(data));
+                    }
                     Ok(Err(e)) => state.set(FetchState::Error(e.to_string())),
                     Err(e) => state.set(FetchState::Error(e.to_string())),
                 }
