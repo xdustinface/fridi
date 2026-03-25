@@ -222,6 +222,9 @@ fn compute_task_progress(body: &str) -> Option<(usize, usize)> {
 }
 
 fn open_url(url: &str) {
+    if !url.starts_with("https://") {
+        return;
+    }
     let url = url.to_string();
     spawn(async move {
         let _ = tokio::task::spawn_blocking(move || open::that(&url)).await;
