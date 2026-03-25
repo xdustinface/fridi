@@ -90,16 +90,12 @@ pub(crate) fn TerminalView(
                     term.open(el);
                     let fitAddon = new FitAddon.FitAddon();
                     term.loadAddon(fitAddon);
-                    if (!window.fridiTerminalSize) window.fridiTerminalSize = {{}};
                     function syncSize() {{
                         let p = el.parentElement;
                         if (p && p.clientWidth > 0 && p.clientHeight > 0) {{
                             el.style.width = p.clientWidth + 'px';
                             el.style.height = (p.clientHeight - el.offsetTop) + 'px';
                             fitAddon.fit();
-                            console.log('XTERM FIT: cols=' + term.cols + ' rows=' + term.rows);
-                            window.fridiTerminalSize['{tid}'] = {{ cols: term.cols, rows: term.rows }};
-                            console.log('XTERM SIZE SET:', JSON.stringify(window.fridiTerminalSize['{tid}']));
                             return true;
                         }}
                         return false;
@@ -120,65 +116,62 @@ pub(crate) fn TerminalView(
         });
     };
 
-    // Coroutine that polls xterm size from a JS global and resizes the PTY.
+    // Event-driven PTY resize via `dioxus.send()`/`eval.recv()`.
     let resize_step = step_name.clone();
     let resize_tid = terminal_id.read().clone();
     use_coroutine(move |_: UnboundedReceiver<()>| {
         let step = resize_step.clone();
         let tid = resize_tid.clone();
         async move {
-            tracing::info!("Resize coroutine started for step={}, tid={}", step, tid);
-            let mut last_cols: u16 = 0;
-            let mut last_rows: u16 = 0;
+            // Wait for the terminal to be created in JS.
             loop {
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                let check = format!("return window.fridiTerminals['{}'] ? true : false;", tid);
+                if let Ok(val) = document::eval(&check).await {
+                    if val == true {
+                        break;
+                    }
+                }
+            }
 
-                let js = format!(
-                    "var s = window.fridiTerminalSize && window.fridiTerminalSize['{tid}']; \
-                     return s ? s.cols + ',' + s.rows : '';"
-                );
-                match document::eval(&js).await {
+            // Set up the resize event channel. The JS calls `dioxus.send()` on
+            // every xterm resize (and once immediately with the initial size).
+            let js = format!(
+                r#"
+                var t = window.fridiTerminals['{tid}'];
+                if (t) {{
+                    dioxus.send({{ cols: t.cols, rows: t.rows }});
+                    t.onResize(function(size) {{
+                        dioxus.send({{ cols: size.cols, rows: size.rows }});
+                    }});
+                }}
+                "#
+            );
+
+            let mut eval = document::eval(&js);
+
+            tracing::info!("PTY resize channel established for step {}", step);
+
+            loop {
+                match eval.recv::<serde_json::Value>().await {
                     Ok(val) => {
-                        tracing::debug!("Resize JS eval ok for tid={}: {:?}", tid, val);
-                        if let Some(s) = val.as_str() {
-                            let parts: Vec<&str> = s.split(',').collect();
-                            if parts.len() == 2 {
-                                if let (Ok(cols), Ok(rows)) =
-                                    (parts[0].parse::<u16>(), parts[1].parse::<u16>())
-                                {
-                                    if cols != last_cols || rows != last_rows {
-                                        last_cols = cols;
-                                        last_rows = rows;
-                                        tracing::info!(
-                                            "PTY resize: {}x{} for step {}",
-                                            cols,
-                                            rows,
-                                            step
-                                        );
-                                        match pty::get_resizer(&step) {
-                                            Some(resizer) => {
-                                                tracing::debug!(
-                                                    "Resizer found for step={}, calling resize",
-                                                    step
-                                                );
-                                                resizer.resize(cols, rows);
-                                            }
-                                            None => {
-                                                tracing::warn!(
-                                                    "No resizer found for step={}",
-                                                    step
-                                                );
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    tracing::warn!("Failed to parse resize values from {:?}", s);
-                                }
+                        if let (Some(cols), Some(rows)) = (
+                            val.get("cols").and_then(|v| v.as_u64()),
+                            val.get("rows").and_then(|v| v.as_u64()),
+                        ) {
+                            let cols = cols as u16;
+                            let rows = rows as u16;
+                            tracing::info!("PTY resize event: {}x{} for step {}", cols, rows, step);
+                            if let Some(resizer) = pty::get_resizer(&step) {
+                                resizer.resize(cols, rows);
+                            } else {
+                                tracing::warn!("No PTY resizer found for step {}", step);
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::warn!("Resize JS eval failed for tid={}: {:?}", tid, e);
+                        tracing::warn!("PTY resize channel closed for step {}: {}", step, e);
+                        break;
                     }
                 }
             }
