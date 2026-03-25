@@ -943,4 +943,125 @@ body {
     color: var(--status-error);
     font-size: 12px;
 }
+
+/* Backlog tab */
+.backlog-tab {
+    padding: var(--space-8);
+    overflow-y: auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.backlog-input-form {
+    flex-shrink: 0;
+}
+
+.backlog-input {
+    width: 100%;
+    padding: 10px var(--space-3);
+    background-color: var(--surface-1);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+}
+
+.backlog-input:focus {
+    border-color: var(--accent);
+}
+
+.backlog-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.backlog-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.backlog-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-normal);
+}
+
+.backlog-item:hover {
+    background-color: var(--surface-2);
+}
+
+.backlog-item.completed .backlog-text {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+}
+
+.backlog-checkbox {
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.backlog-priority-urgent {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--status-error);
+    flex-shrink: 0;
+}
+
+.backlog-priority-important {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--status-warning);
+    flex-shrink: 0;
+}
+
+.backlog-text {
+    font-size: 13px;
+    color: var(--text-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.backlog-tag {
+    font-size: 11px;
+    padding: 1px var(--space-2);
+    background-color: var(--accent-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--accent-hover);
+    flex-shrink: 0;
+}
+
+.backlog-context {
+    font-size: 11px;
+    padding: 1px var(--space-2);
+    background-color: var(--surface-3);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.backlog-time {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    min-width: 50px;
+    text-align: right;
+}
+
+.backlog-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
 "#;
