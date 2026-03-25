@@ -71,10 +71,12 @@ pub(crate) fn TerminalView(
     // Reset tracking state so the delta writer replays all buffered output
     // into the fresh xterm instance after a tab switch re-mount.
     let tid_for_mount = terminal_id.read().clone();
+    let buffered_output = output.clone();
     let on_mounted = move |_evt: MountedEvent| {
         written_len.set(0);
         terminal_ready.set(false);
         let tid = tid_for_mount.clone();
+        let current_output = buffered_output.clone();
         spawn(async move {
             let js = format!(
                 r#"
@@ -127,6 +129,27 @@ pub(crate) fn TerminalView(
             // fresh xterm instance (signals persist across re-mounts).
             written_len.set(0);
             terminal_ready.set(true);
+
+            // Write all accumulated output directly into the fresh xterm instance.
+            // The render-cycle delta writer won't fire because the `output` prop
+            // hasn't changed, so we must replay the buffer here.
+            if !current_output.is_empty() {
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&current_output);
+                let write_js = format!(
+                    r#"
+                    (function() {{
+                        let t = window.fridiTerminals['{tid}'];
+                        if (!t) return;
+                        let binary = atob('{b64}');
+                        let bytes = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                        t.write(bytes);
+                    }})();
+                    "#,
+                );
+                let _ = document::eval(&write_js).await;
+                written_len.set(current_output.len());
+            }
         });
     };
 
