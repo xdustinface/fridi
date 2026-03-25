@@ -143,9 +143,11 @@ pub(crate) fn WorkflowView(session: Session, live_state: Option<LiveWorkflowStat
         }
     };
 
+    let session_id_str = session.id.to_string();
     let terminal = selected_info.map(|info| {
         rsx! {
             TerminalView {
+                session_id: session_id_str.clone(),
                 step_name: info.name,
                 attempt: info.attempt,
                 status: info.status_label,

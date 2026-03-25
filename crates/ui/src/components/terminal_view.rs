@@ -2,11 +2,11 @@ use base64::Engine;
 use dioxus::prelude::*;
 use fridi_agent::pty;
 
-/// Hex-encodes the step name to produce a collision-free terminal element ID.
-/// Plain sanitization (replacing non-alphanumeric chars with `-`) would collide
-/// for names like `build.foo` vs `build/foo`.
-fn terminal_id_for(step_name: &str) -> String {
-    let hex: String = step_name
+/// Hex-encodes the session ID and step name to produce a collision-free terminal
+/// element ID. Including the session ID prevents collisions when multiple
+/// sessions run steps with the same name.
+fn terminal_id_for(session_id: &str, step_name: &str) -> String {
+    let hex: String = format!("{session_id}:{step_name}")
         .as_bytes()
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -16,6 +16,7 @@ fn terminal_id_for(step_name: &str) -> String {
 
 #[component]
 pub(crate) fn TerminalView(
+    session_id: String,
     step_name: String,
     attempt: u32,
     status: String,
@@ -30,7 +31,10 @@ pub(crate) fn TerminalView(
         _ => "pending",
     };
 
-    let terminal_id = use_memo(use_reactive!(|step_name| terminal_id_for(&step_name)));
+    let terminal_id = use_memo(use_reactive!(|session_id, step_name| terminal_id_for(
+        &session_id,
+        &step_name
+    )));
 
     // Track how many bytes we have already written to this xterm instance so we
     // only send the delta on each render.
@@ -117,10 +121,10 @@ pub(crate) fn TerminalView(
     };
 
     // Event-driven PTY resize via `dioxus.send()`/`eval.recv()`.
-    let resize_step = step_name.clone();
+    let resize_key = format!("{}:{}", session_id, step_name);
     let resize_tid = terminal_id.read().clone();
     use_coroutine(move |_: UnboundedReceiver<()>| {
-        let step = resize_step.clone();
+        let step = resize_key.clone();
         let tid = resize_tid.clone();
         async move {
             // Wait for the terminal to be created in JS.
