@@ -1049,8 +1049,8 @@ body {
     border: none;
     cursor: pointer;
     padding: 0;
-    width: 20px;
-    height: 20px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;

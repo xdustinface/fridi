@@ -89,7 +89,7 @@ fn dot_fill_color(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -
     } else if failed || seconds_since_fetch > 120 {
         "var(--status-error)"
     } else if seconds_since_fetch <= 60 {
-        "var(--status-success)"
+        "var(--accent)"
     } else {
         "var(--text-tertiary)"
     }
@@ -223,7 +223,7 @@ pub(crate) fn HomeDashboard(
             let secs = *seconds_since_fetch.read();
             let failed = *fetch_failed.read();
 
-            let circumference: f64 = 2.0 * std::f64::consts::PI * 9.0;
+            let circumference: f64 = 2.0 * std::f64::consts::PI * 12.5;
             let progress = 1.0 - (secs as f64 / POLL_INTERVAL_SECS as f64).min(1.0);
             let offset = circumference * (1.0 - progress);
             let fill_color = dot_fill_color(refreshing, failed, secs);
@@ -283,33 +283,33 @@ pub(crate) fn HomeDashboard(
                                 }
                             },
                             svg {
-                                width: "20",
-                                height: "20",
-                                view_box: "0 0 20 20",
+                                width: "28",
+                                height: "28",
+                                view_box: "0 0 28 28",
                                 title { "{tooltip_text}" }
                                 // Filled status dot
                                 circle {
-                                    cx: "10", cy: "10", r: "7",
+                                    cx: "14", cy: "14", r: "10",
                                     fill: "{fill_color}",
                                     class: "{pulse_class}",
                                 }
                                 // Outer ring background
                                 circle {
-                                    cx: "10", cy: "10", r: "9",
+                                    cx: "14", cy: "14", r: "12.5",
                                     fill: "none",
                                     stroke: "var(--surface-3)",
-                                    stroke_width: "1.5",
+                                    stroke_width: "2",
                                 }
                                 // Outer countdown ring (progress arc)
                                 circle {
-                                    cx: "10", cy: "10", r: "9",
+                                    cx: "14", cy: "14", r: "12.5",
                                     fill: "none",
                                     stroke: "var(--text-secondary)",
-                                    stroke_width: "1.5",
+                                    stroke_width: "2",
                                     stroke_dasharray: "{circumference}",
                                     stroke_dashoffset: "{offset}",
                                     stroke_linecap: "round",
-                                    transform: "rotate(-90 10 10)",
+                                    transform: "rotate(-90 14 14)",
                                 }
                             }
                         }
