@@ -141,8 +141,12 @@ pub(crate) fn TerminalView(
                 var t = window.fridiTerminals['{tid}'];
                 if (t) {{
                     dioxus.send({{ cols: t.cols, rows: t.rows }});
+                    var resizeTimer = null;
                     t.onResize(function(size) {{
-                        dioxus.send({{ cols: size.cols, rows: size.rows }});
+                        if (resizeTimer) clearTimeout(resizeTimer);
+                        resizeTimer = setTimeout(function() {{
+                            dioxus.send({{ cols: size.cols, rows: size.rows }});
+                        }}, 150);
                     }});
                 }}
                 "#
@@ -165,7 +169,20 @@ pub(crate) fn TerminalView(
                             if let Some(resizer) = pty::get_resizer(&step) {
                                 resizer.resize(cols, rows);
                             } else {
-                                tracing::warn!("No PTY resizer found for step {}", step);
+                                // Resizer may not be registered yet; retry with backoff.
+                                let mut retries = 0;
+                                while pty::get_resizer(&step).is_none() && retries < 30 {
+                                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                                    retries += 1;
+                                }
+                                if let Some(resizer) = pty::get_resizer(&step) {
+                                    resizer.resize(cols, rows);
+                                } else {
+                                    tracing::warn!(
+                                        "PTY resizer not found after retries for step {}",
+                                        step
+                                    );
+                                }
                             }
                         }
                     }
