@@ -1038,7 +1038,7 @@ body {
     color: var(--text-tertiary);
 }
 
-/* Sync status indicator with dot, label, and CSS tooltip */
+/* Sync status pill button */
 .sync-status {
     display: flex;
     align-items: center;
@@ -1046,14 +1046,32 @@ body {
     cursor: pointer;
     position: relative;
     align-self: flex-end;
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    transition: background-color var(--transition-normal);
+    padding: 4px 10px;
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    transition: background-color var(--transition-normal), border-color var(--transition-normal);
 }
 
 .sync-status:hover {
-    background-color: var(--surface-2);
+    background-color: var(--surface-3);
 }
+
+.sync-status:active {
+    background-color: var(--surface-2);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.sync-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sync-dot.success { background-color: var(--accent); }
+.sync-dot.warning { background-color: var(--status-warning); animation: pulse-glow 1.5s ease-in-out infinite; }
+.sync-dot.error { background-color: var(--status-error); }
 
 .sync-label {
     font-size: 12px;
@@ -1078,10 +1096,6 @@ body {
 @keyframes pulse-glow {
     0%, 100% { filter: brightness(1); }
     50% { filter: brightness(1.4); }
-}
-
-.refresh-pulse {
-    animation: pulse-glow 1.5s ease-in-out infinite;
 }
 
 /* Quick actions strip */

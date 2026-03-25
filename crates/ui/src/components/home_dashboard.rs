@@ -82,16 +82,14 @@ fn relative_time(iso: &str) -> String {
     }
 }
 
-/// Returns the fill color for the refresh status dot based on state.
-fn dot_fill_color(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> &'static str {
+/// Returns the CSS class for the sync dot based on state.
+fn dot_state_class(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> &'static str {
     if is_refreshing {
-        "var(--status-warning)"
+        "warning"
     } else if failed || seconds_since_fetch > 120 {
-        "var(--status-error)"
-    } else if seconds_since_fetch <= 60 {
-        "var(--accent)"
+        "error"
     } else {
-        "var(--text-tertiary)"
+        "success"
     }
 }
 
@@ -234,13 +232,9 @@ pub(crate) fn HomeDashboard(
             let secs = *seconds_since_fetch.read();
             let failed = *fetch_failed.read();
 
-            let circumference: f64 = 2.0 * std::f64::consts::PI * 12.5;
-            let progress = 1.0 - (secs as f64 / POLL_INTERVAL_SECS as f64).min(1.0);
-            let offset = circumference * (1.0 - progress);
-            let fill_color = dot_fill_color(refreshing, failed, secs);
+            let dot_class = dot_state_class(refreshing, failed, secs);
             let tooltip_text = dot_tooltip(refreshing, failed, secs);
             let label_text = sync_label(refreshing, failed, secs);
-            let pulse_class = if refreshing { "refresh-pulse" } else { "" };
 
             rsx! {
                 div { class: "dashboard",
@@ -294,32 +288,7 @@ pub(crate) fn HomeDashboard(
                                 });
                             }
                         },
-                        svg {
-                            width: "28",
-                            height: "28",
-                            view_box: "0 0 28 28",
-                            circle {
-                                cx: "14", cy: "14", r: "10",
-                                fill: "{fill_color}",
-                                class: "{pulse_class}",
-                            }
-                            circle {
-                                cx: "14", cy: "14", r: "12.5",
-                                fill: "none",
-                                stroke: "var(--surface-3)",
-                                stroke_width: "2",
-                            }
-                            circle {
-                                cx: "14", cy: "14", r: "12.5",
-                                fill: "none",
-                                stroke: "var(--text-secondary)",
-                                stroke_width: "2",
-                                stroke_dasharray: "{circumference}",
-                                stroke_dashoffset: "{offset}",
-                                stroke_linecap: "round",
-                                transform: "rotate(-90 14 14)",
-                            }
-                        }
+                        div { class: "sync-dot {dot_class}" }
                         span { class: "sync-label", "{label_text}" }
                     }
 
@@ -560,12 +529,12 @@ mod tests {
     }
 
     #[test]
-    fn dot_fill_color_states() {
-        assert_eq!(dot_fill_color(true, false, 0), "var(--status-warning)");
-        assert_eq!(dot_fill_color(false, false, 30), "var(--accent)");
-        assert_eq!(dot_fill_color(false, false, 90), "var(--text-tertiary)");
-        assert_eq!(dot_fill_color(false, false, 130), "var(--status-error)");
-        assert_eq!(dot_fill_color(false, true, 10), "var(--status-error)");
+    fn dot_state_class_states() {
+        assert_eq!(dot_state_class(true, false, 0), "warning");
+        assert_eq!(dot_state_class(false, false, 30), "success");
+        assert_eq!(dot_state_class(false, false, 90), "success");
+        assert_eq!(dot_state_class(false, false, 130), "error");
+        assert_eq!(dot_state_class(false, true, 10), "error");
     }
 
     #[test]
