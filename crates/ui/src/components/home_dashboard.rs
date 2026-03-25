@@ -27,7 +27,7 @@ pub(crate) fn warm_overview_cache(repo: Option<String>) {
         .await;
         if let Ok(Ok(data)) = result {
             let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
-            *cache.lock().unwrap() = Some(data);
+            *cache.lock().unwrap_or_else(|e| e.into_inner()) = Some(data);
         }
     });
 }
@@ -83,7 +83,7 @@ fn relative_time(iso: &str) -> String {
 }
 
 /// Returns the CSS class for the sync dot based on state.
-fn dot_state_class(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> &'static str {
+fn dot_state_class(is_refreshing: bool, failed: bool, seconds_since_fetch: u32) -> &'static str {
     if is_refreshing {
         "warning"
     } else if failed || seconds_since_fetch > 120 {
@@ -94,18 +94,21 @@ fn dot_state_class(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) 
 }
 
 /// Returns the detail text displayed below the status label.
-fn sync_detail(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> String {
+fn sync_detail(is_refreshing: bool, failed: bool, seconds_since_fetch: u32) -> String {
     if is_refreshing {
         "Refreshing...".to_string()
-    } else if failed || seconds_since_fetch > 120 {
+    } else if failed {
         "Last sync failed".to_string()
+    } else if seconds_since_fetch > 120 {
+        let mins = seconds_since_fetch / 60;
+        format!("Stale \u{2014} {mins}m ago")
     } else {
         format!("Updated {seconds_since_fetch}s ago")
     }
 }
 
 /// Returns the short label text displayed next to the status dot.
-fn sync_label(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> &'static str {
+fn sync_label(is_refreshing: bool, failed: bool, seconds_since_fetch: u32) -> &'static str {
     if is_refreshing {
         "Syncing..."
     } else if failed || seconds_since_fetch > 120 {
@@ -142,7 +145,7 @@ pub(crate) fn HomeDashboard(
 ) -> Element {
     let initial_state = {
         let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
-        match cache.lock().unwrap().clone() {
+        match cache.lock().unwrap_or_else(|e| e.into_inner()).clone() {
             Some(data) => FetchState::Loaded(data),
             None => FetchState::Loading,
         }
@@ -151,7 +154,7 @@ pub(crate) fn HomeDashboard(
     let mut pick_state = use_signal(|| PickState::Idle);
     let mut removing_labels: Signal<HashSet<u64>> = use_signal(HashSet::new);
     let mut is_refreshing = use_signal(|| true);
-    let mut seconds_since_fetch: Signal<u16> = use_signal(|| 0);
+    let mut seconds_since_fetch: Signal<u32> = use_signal(|| 0);
     let mut fetch_failed = use_signal(|| false);
     let repo_clone = repo.clone();
     let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -180,7 +183,7 @@ pub(crate) fn HomeDashboard(
                 match overview {
                     Ok(Ok(data)) => {
                         let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
-                        *cache.lock().unwrap() = Some(data.clone());
+                        *cache.lock().unwrap_or_else(|e| e.into_inner()) = Some(data.clone());
                         state.set(FetchState::Loaded(data));
                         seconds_since_fetch.set(0);
                         fetch_failed.set(false);
@@ -206,7 +209,8 @@ pub(crate) fn HomeDashboard(
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             if !*is_refreshing.read() {
-                seconds_since_fetch += 1;
+                let current = *seconds_since_fetch.read();
+                seconds_since_fetch.set(current.saturating_add(1));
             }
         }
     });
@@ -269,7 +273,8 @@ pub(crate) fn HomeDashboard(
                                         Ok(Ok(data)) => {
                                             let cache = CACHED_OVERVIEW
                                                 .get_or_init(|| Mutex::new(None));
-                                            *cache.lock().unwrap() = Some(data.clone());
+                                            *cache.lock().unwrap_or_else(|e| e.into_inner()) =
+                                                Some(data.clone());
                                             state.set(FetchState::Loaded(data));
                                             seconds_since_fetch.set(0);
                                             fetch_failed.set(false);
@@ -543,7 +548,7 @@ mod tests {
     fn sync_detail_states() {
         assert_eq!(sync_detail(true, false, 0), "Refreshing...");
         assert_eq!(sync_detail(false, false, 45), "Updated 45s ago");
-        assert_eq!(sync_detail(false, false, 130), "Last sync failed");
+        assert_eq!(sync_detail(false, false, 130), "Stale \u{2014} 2m ago");
         assert_eq!(sync_detail(false, true, 10), "Last sync failed");
     }
 }
