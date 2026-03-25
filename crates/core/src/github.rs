@@ -27,6 +27,8 @@ pub struct GitHubPR {
     pub updated_at: String,
     #[serde(rename = "statusCheckRollup", default)]
     pub status_check_rollup: Vec<StatusCheck>,
+    #[serde(default)]
+    pub labels: Vec<GitHubLabel>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -184,7 +186,7 @@ pub fn fetch_prs(repo: &str) -> Result<Vec<GitHubPR>, GitHubError> {
             "--state",
             "open",
             "--json",
-            "number,title,headRefName,updatedAt,statusCheckRollup",
+            "number,title,headRefName,updatedAt,statusCheckRollup,labels",
             "--limit",
             "50",
         ])
@@ -198,6 +200,29 @@ pub fn fetch_prs(repo: &str) -> Result<Vec<GitHubPR>, GitHubError> {
 
     let prs: Vec<GitHubPR> = serde_json::from_slice(&output.stdout)?;
     Ok(prs)
+}
+
+/// Remove a label from a pull request using the `gh` CLI.
+pub fn remove_pr_label(repo: &str, pr_number: u64, label: &str) -> Result<(), GitHubError> {
+    let output = Command::new("gh")
+        .args([
+            "pr",
+            "edit",
+            &pr_number.to_string(),
+            "--repo",
+            repo,
+            "--remove-label",
+            label,
+        ])
+        .output()?;
+
+    if !output.status.success() {
+        return Err(GitHubError::NonZero {
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        });
+    }
+
+    Ok(())
 }
 
 /// Select the highest priority open issue. Prioritizes by label name containing

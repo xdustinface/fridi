@@ -892,6 +892,29 @@ body {
     display: none;
 }
 
+.dashboard-ready-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px var(--space-3);
+    background-color: var(--accent-subtle);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    color: var(--accent-hover);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+.dashboard-ready-btn:hover:not(:disabled) {
+    background-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.dashboard-ready-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .dashboard-empty {
     padding: var(--space-4);
     text-align: center;
