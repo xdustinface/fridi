@@ -93,12 +93,12 @@ fn dot_state_class(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) 
     }
 }
 
-/// Returns the tooltip text for the refresh status dot.
-fn dot_tooltip(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> String {
+/// Returns the detail text displayed below the status label.
+fn sync_detail(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> String {
     if is_refreshing {
         "Refreshing...".to_string()
     } else if failed || seconds_since_fetch > 120 {
-        "Stale — click to refresh".to_string()
+        "Last sync failed".to_string()
     } else {
         format!("Updated {seconds_since_fetch}s ago")
     }
@@ -233,15 +233,14 @@ pub(crate) fn HomeDashboard(
             let failed = *fetch_failed.read();
 
             let dot_class = dot_state_class(refreshing, failed, secs);
-            let tooltip_text = dot_tooltip(refreshing, failed, secs);
+            let detail_text = sync_detail(refreshing, failed, secs);
             let label_text = sync_label(refreshing, failed, secs);
 
             rsx! {
                 div { class: "dashboard",
-                    // Sync status indicator with dot, label, and CSS tooltip
+                    // Sync status indicator with dot, label, and detail text
                     div {
                         class: "sync-status",
-                        "data-tooltip": "{tooltip_text}",
                         onclick: {
                             let repo = repo.clone();
                             move |_| {
@@ -289,7 +288,10 @@ pub(crate) fn HomeDashboard(
                             }
                         },
                         div { class: "sync-dot {dot_class}" }
-                        span { class: "sync-label", "{label_text}" }
+                        div { class: "sync-text",
+                            span { class: "sync-label", "{label_text}" }
+                            span { class: "sync-detail", "{detail_text}" }
+                        }
                     }
 
                     // Quick actions strip
@@ -538,10 +540,10 @@ mod tests {
     }
 
     #[test]
-    fn dot_tooltip_states() {
-        assert_eq!(dot_tooltip(true, false, 0), "Refreshing...");
-        assert_eq!(dot_tooltip(false, false, 45), "Updated 45s ago");
-        assert_eq!(dot_tooltip(false, false, 130), "Stale — click to refresh");
-        assert_eq!(dot_tooltip(false, true, 10), "Stale — click to refresh");
+    fn sync_detail_states() {
+        assert_eq!(sync_detail(true, false, 0), "Refreshing...");
+        assert_eq!(sync_detail(false, false, 45), "Updated 45s ago");
+        assert_eq!(sync_detail(false, false, 130), "Last sync failed");
+        assert_eq!(sync_detail(false, true, 10), "Last sync failed");
     }
 }

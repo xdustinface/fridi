@@ -1041,12 +1041,11 @@ body {
 /* Sync status pill button */
 .sync-status {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    align-items: flex-start;
+    gap: 8px;
     cursor: pointer;
-    position: relative;
     align-self: flex-end;
-    padding: 4px 10px;
+    padding: 6px 12px;
     background-color: var(--surface-2);
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
@@ -1067,30 +1066,28 @@ body {
     height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
+    margin-top: 4px;
 }
 
 .sync-dot.success { background-color: var(--accent); }
 .sync-dot.warning { background-color: var(--status-warning); animation: pulse-glow 1.5s ease-in-out infinite; }
 .sync-dot.error { background-color: var(--status-error); }
 
-.sync-label {
-    font-size: 12px;
-    color: var(--text-secondary);
-    font-weight: 500;
+.sync-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
 }
 
-.sync-status[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: -24px;
-    right: 0;
-    background: var(--surface-3);
-    color: var(--text-secondary);
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    white-space: nowrap;
-    z-index: 10;
+.sync-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.sync-detail {
+    font-size: 10px;
+    color: var(--text-tertiary);
 }
 
 @keyframes pulse-glow {
