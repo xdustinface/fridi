@@ -944,6 +944,7 @@ body {
     font-size: 12px;
 }
 
+
 /* Backlog tab */
 .backlog-tab {
     padding: var(--space-8);
@@ -1063,5 +1064,68 @@ body {
     flex: 1;
     font-size: 14px;
     color: var(--text-secondary);
+}
+
+/* Quick capture overlay */
+.quick-capture-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(12, 14, 18, 0.8);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 20vh;
+    z-index: 200;
+}
+
+.quick-capture-modal {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    width: 480px;
+    max-width: 90vw;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.quick-capture-input {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    background-color: var(--surface-0);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+}
+
+.quick-capture-input:focus {
+    border-color: var(--accent);
+}
+
+.quick-capture-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.quick-capture-context {
+    font-size: 11px;
+    color: var(--accent);
+    padding: var(--space-1) var(--space-3);
+    background-color: var(--accent-subtle);
+    border-radius: var(--radius-sm);
+    align-self: flex-start;
+}
+
+.quick-capture-hint {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    text-align: center;
 }
 "#;
