@@ -3,6 +3,7 @@ pub(crate) mod confirm_dialog;
 pub(crate) mod home_dashboard;
 pub(crate) mod quick_capture;
 pub(crate) mod session_creator;
+pub(crate) mod sidebar;
 pub(crate) mod split_pane;
 pub(crate) mod step_card;
 pub(crate) mod tab_bar;

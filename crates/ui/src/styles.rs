@@ -1684,4 +1684,187 @@ body {
     background-color: var(--accent);
     color: var(--text-primary);
 }
+
+/* Sidebar */
+.sidebar-edge {
+    position: fixed;
+    left: 0;
+    top: 40px;
+    width: 4px;
+    height: calc(100vh - 40px);
+    background-color: var(--border-subtle);
+    z-index: 50;
+    cursor: pointer;
+    transition: background-color var(--transition-normal);
+}
+
+.sidebar-edge:hover {
+    background-color: var(--accent);
+}
+
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 40px;
+    width: 280px;
+    height: calc(100vh - 40px);
+    background-color: var(--surface-1);
+    border-right: 1px solid var(--border-default);
+    z-index: 49;
+    transform: translateX(-280px);
+    transition: transform var(--transition-slow);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sidebar.expanded {
+    transform: translateX(0);
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar.pinned {
+    box-shadow: none;
+}
+
+.sidebar-backdrop {
+    position: fixed;
+    top: 40px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(12, 14, 18, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 48;
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-4) var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+}
+
+.sidebar-brand {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+}
+
+.sidebar-pin-btn {
+    background: none;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal);
+}
+
+.sidebar-pin-btn:hover {
+    background-color: var(--surface-3);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+.sidebar-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: var(--space-3) 0;
+}
+
+.sidebar-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-4) var(--space-2) var(--space-4);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sidebar-add-btn {
+    background: none;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-sm);
+    line-height: 1.4;
+    transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+.sidebar-add-btn:hover {
+    background-color: var(--surface-3);
+    color: var(--accent);
+}
+
+.sidebar-list {
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 0 var(--space-2);
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-normal);
+}
+
+.sidebar-item:hover {
+    background-color: var(--surface-2);
+}
+
+.sidebar-item.active {
+    background-color: var(--surface-2);
+    border-left: 2px solid var(--accent);
+}
+
+.sidebar-item-name {
+    font-size: 13px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.sidebar-empty {
+    padding: var(--space-4);
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.sidebar-footer {
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+}
+
+.sidebar-hint {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.main-content.sidebar-pinned {
+    margin-left: 280px;
+}
 "#;
