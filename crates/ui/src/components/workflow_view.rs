@@ -5,7 +5,7 @@ use fridi_core::session::Session;
 
 use crate::components::step_card::StepCard;
 use crate::components::terminal_view::TerminalView;
-use crate::engine_bridge::LiveWorkflowState;
+use crate::engine_bridge::SessionLiveState;
 
 /// Information about the currently selected step, used by the terminal view.
 struct SelectedStepInfo {
@@ -16,7 +16,7 @@ struct SelectedStepInfo {
 }
 
 #[component]
-pub(crate) fn WorkflowView(session: Session, live_state: Option<LiveWorkflowState>) -> Element {
+pub(crate) fn WorkflowView(session: Session, live_state: Option<SessionLiveState>) -> Element {
     let mut selected_step = use_signal(|| Option::<String>::None);
 
     let workflow =
