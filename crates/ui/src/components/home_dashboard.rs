@@ -106,6 +106,17 @@ fn dot_tooltip(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> S
     }
 }
 
+/// Returns the short label text displayed next to the status dot.
+fn sync_label(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> &'static str {
+    if is_refreshing {
+        "Syncing..."
+    } else if failed || seconds_since_fetch > 120 {
+        "Stale"
+    } else {
+        "Synced"
+    }
+}
+
 fn ci_badge_class(status: &CiStatus) -> &'static str {
     match status {
         CiStatus::Passed => "ci-badge passed",
@@ -228,91 +239,88 @@ pub(crate) fn HomeDashboard(
             let offset = circumference * (1.0 - progress);
             let fill_color = dot_fill_color(refreshing, failed, secs);
             let tooltip_text = dot_tooltip(refreshing, failed, secs);
+            let label_text = sync_label(refreshing, failed, secs);
             let pulse_class = if refreshing { "refresh-pulse" } else { "" };
 
             rsx! {
                 div { class: "dashboard",
-                    // Refresh status dot with countdown ring
-                    div { class: "refresh-btn-container",
-                        button {
-                            class: "refresh-btn",
-                            onclick: {
+                    // Sync status indicator with dot, label, and CSS tooltip
+                    div {
+                        class: "sync-status",
+                        "data-tooltip": "{tooltip_text}",
+                        onclick: {
+                            let repo = repo.clone();
+                            move |_| {
+                                if *is_refreshing.read() {
+                                    return;
+                                }
+                                seconds_since_fetch.set(0);
+                                is_refreshing.set(true);
                                 let repo = repo.clone();
-                                move |_| {
-                                    if *is_refreshing.read() {
-                                        return;
-                                    }
-                                    seconds_since_fetch.set(0);
-                                    is_refreshing.set(true);
-                                    let repo = repo.clone();
-                                    let work_dir = std::env::current_dir()
-                                        .unwrap_or_else(|_| PathBuf::from("."));
-                                    spawn(async move {
-                                        let overview = {
-                                            let repo = repo.clone();
-                                            let work_dir = work_dir.clone();
-                                            tokio::task::spawn_blocking(move || {
-                                                let repo_str = repo.as_deref().unwrap_or("");
-                                                let store = SessionStore::new(SESSIONS_DIR);
-                                                fridi_core::project_overview::fetch_project_overview(
-                                                    repo_str, &work_dir, &store,
-                                                )
-                                            })
-                                            .await
-                                        };
-                                        match overview {
-                                            Ok(Ok(data)) => {
-                                                let cache = CACHED_OVERVIEW
-                                                    .get_or_init(|| Mutex::new(None));
-                                                *cache.lock().unwrap() = Some(data.clone());
-                                                state.set(FetchState::Loaded(data));
-                                                seconds_since_fetch.set(0);
-                                                fetch_failed.set(false);
-                                            }
-                                            Ok(Err(e)) => {
-                                                state.set(FetchState::Error(e.to_string()));
-                                                fetch_failed.set(true);
-                                            }
-                                            Err(e) => {
-                                                state.set(FetchState::Error(e.to_string()));
-                                                fetch_failed.set(true);
-                                            }
+                                let work_dir = std::env::current_dir()
+                                    .unwrap_or_else(|_| PathBuf::from("."));
+                                spawn(async move {
+                                    let overview = {
+                                        let repo = repo.clone();
+                                        let work_dir = work_dir.clone();
+                                        tokio::task::spawn_blocking(move || {
+                                            let repo_str = repo.as_deref().unwrap_or("");
+                                            let store = SessionStore::new(SESSIONS_DIR);
+                                            fridi_core::project_overview::fetch_project_overview(
+                                                repo_str, &work_dir, &store,
+                                            )
+                                        })
+                                        .await
+                                    };
+                                    match overview {
+                                        Ok(Ok(data)) => {
+                                            let cache = CACHED_OVERVIEW
+                                                .get_or_init(|| Mutex::new(None));
+                                            *cache.lock().unwrap() = Some(data.clone());
+                                            state.set(FetchState::Loaded(data));
+                                            seconds_since_fetch.set(0);
+                                            fetch_failed.set(false);
                                         }
-                                        is_refreshing.set(false);
-                                    });
-                                }
-                            },
-                            svg {
-                                width: "28",
-                                height: "28",
-                                view_box: "0 0 28 28",
-                                title { "{tooltip_text}" }
-                                // Filled status dot
-                                circle {
-                                    cx: "14", cy: "14", r: "10",
-                                    fill: "{fill_color}",
-                                    class: "{pulse_class}",
-                                }
-                                // Outer ring background
-                                circle {
-                                    cx: "14", cy: "14", r: "12.5",
-                                    fill: "none",
-                                    stroke: "var(--surface-3)",
-                                    stroke_width: "2",
-                                }
-                                // Outer countdown ring (progress arc)
-                                circle {
-                                    cx: "14", cy: "14", r: "12.5",
-                                    fill: "none",
-                                    stroke: "var(--text-secondary)",
-                                    stroke_width: "2",
-                                    stroke_dasharray: "{circumference}",
-                                    stroke_dashoffset: "{offset}",
-                                    stroke_linecap: "round",
-                                    transform: "rotate(-90 14 14)",
-                                }
+                                        Ok(Err(e)) => {
+                                            state.set(FetchState::Error(e.to_string()));
+                                            fetch_failed.set(true);
+                                        }
+                                        Err(e) => {
+                                            state.set(FetchState::Error(e.to_string()));
+                                            fetch_failed.set(true);
+                                        }
+                                    }
+                                    is_refreshing.set(false);
+                                });
+                            }
+                        },
+                        svg {
+                            width: "28",
+                            height: "28",
+                            view_box: "0 0 28 28",
+                            circle {
+                                cx: "14", cy: "14", r: "10",
+                                fill: "{fill_color}",
+                                class: "{pulse_class}",
+                            }
+                            circle {
+                                cx: "14", cy: "14", r: "12.5",
+                                fill: "none",
+                                stroke: "var(--surface-3)",
+                                stroke_width: "2",
+                            }
+                            circle {
+                                cx: "14", cy: "14", r: "12.5",
+                                fill: "none",
+                                stroke: "var(--text-secondary)",
+                                stroke_width: "2",
+                                stroke_dasharray: "{circumference}",
+                                stroke_dashoffset: "{offset}",
+                                stroke_linecap: "round",
+                                transform: "rotate(-90 14 14)",
                             }
                         }
+                        span { class: "sync-label", "{label_text}" }
                     }
 
                     // Quick actions strip
@@ -539,5 +547,32 @@ mod tests {
     fn relative_time_future_timestamp() {
         let future = (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
         assert_eq!(relative_time(&future), "just now");
+    }
+
+    #[test]
+    fn sync_label_states() {
+        assert_eq!(sync_label(true, false, 0), "Syncing...");
+        assert_eq!(sync_label(false, false, 30), "Synced");
+        assert_eq!(sync_label(false, false, 60), "Synced");
+        assert_eq!(sync_label(false, false, 90), "Synced");
+        assert_eq!(sync_label(false, false, 130), "Stale");
+        assert_eq!(sync_label(false, true, 10), "Stale");
+    }
+
+    #[test]
+    fn dot_fill_color_states() {
+        assert_eq!(dot_fill_color(true, false, 0), "var(--status-warning)");
+        assert_eq!(dot_fill_color(false, false, 30), "var(--accent)");
+        assert_eq!(dot_fill_color(false, false, 90), "var(--text-tertiary)");
+        assert_eq!(dot_fill_color(false, false, 130), "var(--status-error)");
+        assert_eq!(dot_fill_color(false, true, 10), "var(--status-error)");
+    }
+
+    #[test]
+    fn dot_tooltip_states() {
+        assert_eq!(dot_tooltip(true, false, 0), "Refreshing...");
+        assert_eq!(dot_tooltip(false, false, 45), "Updated 45s ago");
+        assert_eq!(dot_tooltip(false, false, 130), "Stale — click to refresh");
+        assert_eq!(dot_tooltip(false, true, 10), "Stale — click to refresh");
     }
 }

@@ -1038,28 +1038,41 @@ body {
     color: var(--text-tertiary);
 }
 
-/* Refresh status dot with countdown ring */
-.refresh-btn-container {
-    display: flex;
-    justify-content: flex-end;
-}
-
-.refresh-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    width: 28px;
-    height: 28px;
+/* Sync status indicator with dot, label, and CSS tooltip */
+.sync-status {
     display: flex;
     align-items: center;
-    justify-content: center;
-    border-radius: 50%;
+    gap: 6px;
+    cursor: pointer;
+    position: relative;
+    align-self: flex-end;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
     transition: background-color var(--transition-normal);
 }
 
-.refresh-btn:hover {
-    background-color: var(--surface-3);
+.sync-status:hover {
+    background-color: var(--surface-2);
+}
+
+.sync-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.sync-status[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -24px;
+    right: 0;
+    background: var(--surface-3);
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 10;
 }
 
 @keyframes pulse-glow {
