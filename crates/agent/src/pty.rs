@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use strip_ansi_escapes::strip as strip_ansi;
@@ -9,10 +10,73 @@ use tracing::{debug, error};
 
 use crate::traits::{AgentError, AgentOutput};
 
+/// Handle that allows resizing a PTY from any thread.
+#[derive(Clone)]
+pub struct PtyResizer {
+    master: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
+}
+
+impl PtyResizer {
+    pub fn resize(&self, cols: u16, rows: u16) {
+        tracing::debug!(
+            "PtyResizer::resize called with cols={}, rows={}",
+            cols,
+            rows
+        );
+        if let Ok(master) = self.master.try_lock() {
+            let result = master.resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            });
+            tracing::debug!("PtyResizer::resize result: {:?}", result);
+        } else {
+            tracing::warn!("PtyResizer::resize: failed to acquire master lock");
+        }
+    }
+}
+
+static RESIZERS: OnceLock<std::sync::Mutex<HashMap<String, PtyResizer>>> = OnceLock::new();
+
+fn resizer_registry() -> &'static std::sync::Mutex<HashMap<String, PtyResizer>> {
+    RESIZERS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
+/// Register a resizer handle for a step so the UI can look it up by name.
+pub fn register_resizer(id: &str, resizer: PtyResizer) {
+    if let Ok(mut map) = resizer_registry().lock() {
+        tracing::debug!("register_resizer: registering key={:?}", id);
+        map.insert(id.to_string(), resizer);
+    }
+}
+
+/// Retrieve a previously registered resizer by step name.
+pub fn get_resizer(id: &str) -> Option<PtyResizer> {
+    let map = resizer_registry().lock().ok()?;
+    let keys: Vec<&String> = map.keys().collect();
+    let result = map.get(id).cloned();
+    tracing::debug!(
+        "get_resizer: lookup key={:?}, found={}, registry_keys={:?}",
+        id,
+        result.is_some(),
+        keys
+    );
+    result
+}
+
+/// Remove a resizer when it is no longer needed.
+pub fn remove_resizer(id: &str) {
+    if let Ok(mut map) = resizer_registry().lock() {
+        map.remove(id);
+    }
+}
+
 pub struct PtyProcess {
     output_tx: broadcast::Sender<AgentOutput>,
     initial_rx: Option<broadcast::Receiver<AgentOutput>>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    master: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
     running: Arc<AtomicBool>,
     collected_output: Arc<Mutex<Vec<u8>>>,
     reader_handle: Option<tokio::task::JoinHandle<()>>,
@@ -55,6 +119,8 @@ impl PtyProcess {
             .take_writer()
             .map_err(|e| AgentError::SpawnError(format!("failed to take PTY writer: {e}")))?;
 
+        let master = Arc::new(Mutex::new(pair.master));
+
         let (output_tx, initial_rx) = broadcast::channel(1024);
         let running = Arc::new(AtomicBool::new(true));
         let collected_output = Arc::new(Mutex::new(Vec::new()));
@@ -92,11 +158,19 @@ impl PtyProcess {
             output_tx,
             initial_rx: Some(initial_rx),
             writer: Arc::new(Mutex::new(writer)),
+            master,
             running,
             collected_output,
             reader_handle: Some(reader_handle),
             child: Arc::new(Mutex::new(child)),
         })
+    }
+
+    /// Returns a cloneable handle for resizing this PTY from any thread.
+    pub fn resizer(&self) -> PtyResizer {
+        PtyResizer {
+            master: self.master.clone(),
+        }
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> { self.output_tx.subscribe() }
@@ -113,6 +187,22 @@ impl PtyProcess {
         writer.write_all(data).map_err(AgentError::Io)?;
         writer.flush().map_err(AgentError::Io)?;
         Ok(())
+    }
+
+    pub async fn resize(&self, cols: u16, rows: u16) -> Result<(), AgentError> {
+        let master = self.master.clone();
+        tokio::task::spawn_blocking(move || {
+            let master = master.blocking_lock();
+            master.resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+        })
+        .await
+        .map_err(|e| AgentError::ExecutionError(format!("resize task failed: {e}")))?
+        .map_err(|e| AgentError::ExecutionError(format!("failed to resize PTY: {e}")))
     }
 
     pub async fn wait(&mut self) -> Result<i32, AgentError> {

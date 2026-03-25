@@ -1,5 +1,6 @@
 use base64::Engine;
 use dioxus::prelude::*;
+use fridi_agent::pty;
 
 /// Hex-encodes the step name to produce a collision-free terminal element ID.
 /// Plain sanitization (replacing non-alphanumeric chars with `-`) would collide
@@ -89,15 +90,23 @@ pub(crate) fn TerminalView(
                     term.open(el);
                     let fitAddon = new FitAddon.FitAddon();
                     term.loadAddon(fitAddon);
-                    function doFit() {{
-                        if (el.clientWidth > 0 && el.clientHeight > 0) {{
+                    function syncSize() {{
+                        let p = el.parentElement;
+                        if (p && p.clientWidth > 0 && p.clientHeight > 0) {{
+                            el.style.width = p.clientWidth + 'px';
+                            el.style.height = (p.clientHeight - el.offsetTop) + 'px';
                             fitAddon.fit();
-                        }} else {{
+                            return true;
+                        }}
+                        return false;
+                    }}
+                    function doFit() {{
+                        if (!syncSize()) {{
                             requestAnimationFrame(doFit);
                         }}
                     }}
                     requestAnimationFrame(doFit);
-                    new ResizeObserver(() => fitAddon.fit()).observe(el);
+                    new ResizeObserver(() => syncSize()).observe(el.parentElement);
                     window.fridiTerminals['{tid}'] = term;
                 }})();
                 "#,
@@ -106,6 +115,85 @@ pub(crate) fn TerminalView(
             terminal_ready.set(true);
         });
     };
+
+    // Event-driven PTY resize via `dioxus.send()`/`eval.recv()`.
+    let resize_step = step_name.clone();
+    let resize_tid = terminal_id.read().clone();
+    use_coroutine(move |_: UnboundedReceiver<()>| {
+        let step = resize_step.clone();
+        let tid = resize_tid.clone();
+        async move {
+            // Wait for the terminal to be created in JS.
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                let check = format!("return window.fridiTerminals['{}'] ? true : false;", tid);
+                if let Ok(val) = document::eval(&check).await {
+                    if val == true {
+                        break;
+                    }
+                }
+            }
+
+            // Set up the resize event channel. The JS calls `dioxus.send()` on
+            // every xterm resize (and once immediately with the initial size).
+            let js = format!(
+                r#"
+                var t = window.fridiTerminals['{tid}'];
+                if (t) {{
+                    dioxus.send({{ cols: t.cols, rows: t.rows }});
+                    var resizeTimer = null;
+                    t.onResize(function(size) {{
+                        if (resizeTimer) clearTimeout(resizeTimer);
+                        resizeTimer = setTimeout(function() {{
+                            dioxus.send({{ cols: size.cols, rows: size.rows }});
+                        }}, 150);
+                    }});
+                }}
+                "#
+            );
+
+            let mut eval = document::eval(&js);
+
+            tracing::info!("PTY resize channel established for step {}", step);
+
+            loop {
+                match eval.recv::<serde_json::Value>().await {
+                    Ok(val) => {
+                        if let (Some(cols), Some(rows)) = (
+                            val.get("cols").and_then(|v| v.as_u64()),
+                            val.get("rows").and_then(|v| v.as_u64()),
+                        ) {
+                            let cols = cols as u16;
+                            let rows = rows as u16;
+                            tracing::info!("PTY resize event: {}x{} for step {}", cols, rows, step);
+                            if let Some(resizer) = pty::get_resizer(&step) {
+                                resizer.resize(cols, rows);
+                            } else {
+                                // Resizer may not be registered yet; retry with backoff.
+                                let mut retries = 0;
+                                while pty::get_resizer(&step).is_none() && retries < 30 {
+                                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                                    retries += 1;
+                                }
+                                if let Some(resizer) = pty::get_resizer(&step) {
+                                    resizer.resize(cols, rows);
+                                } else {
+                                    tracing::warn!(
+                                        "PTY resizer not found after retries for step {}",
+                                        step
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("PTY resize channel closed for step {}: {}", step, e);
+                        break;
+                    }
+                }
+            }
+        }
+    });
 
     // Write new output data to the xterm instance (only the delta since last write).
     let current_len = output.len();

@@ -1792,6 +1792,8 @@ dependencies = [
  "fridi-mcp",
  "fridi-notify",
  "fridi-trigger",
+ "serde",
+ "serde_json",
  "serde_yaml",
  "tokio",
  "tracing",
