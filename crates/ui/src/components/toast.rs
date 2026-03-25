@@ -56,10 +56,13 @@ pub(crate) fn next_toast_id() -> u64 {
     NEXT_TOAST_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// Push a new toast into the global signal (must be called inside a component).
+/// Push a new toast into the given signal.
 #[allow(dead_code)]
-pub(crate) fn push_toast(message: impl Into<String>, level: ToastLevel) {
-    let mut toasts = use_context::<Toasts>().0;
+pub(crate) fn push_toast(
+    toasts: &mut Signal<Vec<ToastMessage>>,
+    message: impl Into<String>,
+    level: ToastLevel,
+) {
     let id = NEXT_TOAST_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     toasts.write().push(ToastMessage {
         id,

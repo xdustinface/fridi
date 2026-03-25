@@ -5,7 +5,7 @@ use fridi_core::session::Session;
 
 use crate::components::step_card::StepCard;
 use crate::components::terminal_view::TerminalView;
-use crate::components::toast::{ToastLevel, Toasts};
+use crate::components::toast::{ToastLevel, ToastMessage, Toasts, next_toast_id};
 use crate::engine_bridge::SessionLiveState;
 
 /// Information about the currently selected step, used by the terminal view.
@@ -18,6 +18,7 @@ struct SelectedStepInfo {
 
 #[component]
 pub(crate) fn WorkflowView(session: Session, live_state: Option<SessionLiveState>) -> Element {
+    let mut toasts = use_context::<Toasts>().0;
     let mut selected_step = use_signal(|| Option::<String>::None);
 
     let workflow =
@@ -157,33 +158,42 @@ pub(crate) fn WorkflowView(session: Session, live_state: Option<SessionLiveState
         }
     });
 
-    // Push new notifications as toasts. Track how many we have already shown
-    // so we only fire each notification once.
+    // Track how many notifications we have already shown so we only fire each
+    // notification once. Reset when the session changes.
     let mut shown_count = use_signal(|| 0usize);
+    let mut prev_session_id = use_signal(|| session.id.clone());
+    if *prev_session_id.read() != session.id {
+        prev_session_id.set(session.id.clone());
+        shown_count.set(0);
+    }
+
     let notifications: Vec<String> = live_state
         .as_ref()
         .map(|ls| ls.notifications.clone())
         .unwrap_or_default();
-    let already_shown = *shown_count.read();
-    if notifications.len() > already_shown {
-        let mut toasts = use_context::<Toasts>().0;
-        for msg in &notifications[already_shown..] {
-            let level = if msg.starts_with("Failed:") {
-                ToastLevel::Error
-            } else {
-                ToastLevel::Warning
-            };
-            let id = crate::components::toast::next_toast_id();
-            toasts.write().push(crate::components::toast::ToastMessage {
-                id,
-                message: msg.clone(),
-                level,
-                created_at: std::time::Instant::now(),
-                exiting: false,
-            });
+
+    // Push new notifications as toasts inside an effect so we don't mutate
+    // global signal state during the render path.
+    use_effect(move || {
+        let already_shown = *shown_count.read();
+        if notifications.len() > already_shown {
+            for msg in &notifications[already_shown..] {
+                let level = if msg.starts_with("Failed:") {
+                    ToastLevel::Error
+                } else {
+                    ToastLevel::Warning
+                };
+                toasts.write().push(ToastMessage {
+                    id: next_toast_id(),
+                    message: msg.clone(),
+                    level,
+                    created_at: std::time::Instant::now(),
+                    exiting: false,
+                });
+            }
+            shown_count.set(notifications.len());
         }
-        shown_count.set(notifications.len());
-    }
+    });
 
     rsx! {
         crate::components::split_pane::SplitPane {

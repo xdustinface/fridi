@@ -13,7 +13,7 @@ use crate::components::home_dashboard::HomeDashboard;
 use crate::components::quick_capture::QuickCapture;
 use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::tab_bar::TabBar;
-use crate::components::toast::{ToastContainer, ToastLevel, Toasts};
+use crate::components::toast::{ToastContainer, ToastLevel, ToastMessage, Toasts, next_toast_id};
 use crate::components::workflow_view::WorkflowView;
 use crate::engine_bridge::use_engine_events;
 use crate::state::{self, TabInfo};
@@ -286,16 +286,13 @@ pub(crate) fn App() -> Element {
                 }
             });
 
-            toasts
-                .0
-                .write()
-                .push(crate::components::toast::ToastMessage {
-                    id: crate::components::toast::next_toast_id(),
-                    message: format!("Session started: {context_label}"),
-                    level: ToastLevel::Info,
-                    created_at: std::time::Instant::now(),
-                    exiting: false,
-                });
+            toasts.0.write().push(ToastMessage {
+                id: next_toast_id(),
+                message: format!("Session started: {context_label}"),
+                level: ToastLevel::Info,
+                created_at: std::time::Instant::now(),
+                exiting: false,
+            });
 
             let tab = TabInfo {
                 session_id: session_id.clone(),
