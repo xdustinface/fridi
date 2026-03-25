@@ -47,7 +47,9 @@ impl TriggerManager {
 
     /// Takes the event receiver. Can only be called once, before `start`.
     /// The consumer uses this to receive trigger events.
-    pub fn subscribe(&mut self) -> Option<mpsc::Receiver<TriggerEvent>> { self.event_rx.take() }
+    pub fn subscribe(&mut self) -> Option<mpsc::Receiver<TriggerEvent>> {
+        self.event_rx.take()
+    }
 
     /// Starts all registered triggers. Each trigger's events are wrapped
     /// to include the configured overlap policy before being forwarded.

@@ -133,10 +133,7 @@ fn fetch_issue_summaries(repo: &str) -> Result<Vec<IssueSummary>, GitHubError> {
     Ok(issues
         .into_iter()
         .map(|issue| {
-            let task_progress = issue
-                .body
-                .as_deref()
-                .and_then(parse_task_progress);
+            let task_progress = issue.body.as_deref().and_then(parse_task_progress);
             let assignees = issue
                 .assignees
                 .unwrap_or_default()

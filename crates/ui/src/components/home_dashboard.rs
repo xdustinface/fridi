@@ -8,7 +8,7 @@ use fridi_core::project_overview::{IssueSummary, ProjectOverview};
 use fridi_core::session::SessionStore;
 
 use crate::components::session_creator::SessionSource;
-use crate::components::toast::{push_toast, ToastLevel, ToastMessage, Toasts};
+use crate::components::toast::{ToastLevel, ToastMessage, Toasts, push_toast};
 
 static CACHED_OVERVIEW: OnceLock<Mutex<Option<ProjectOverview>>> = OnceLock::new();
 
@@ -166,7 +166,10 @@ fn parse_checkboxes(body: &str) -> Vec<CheckboxLine> {
         .enumerate()
         .filter_map(|(line_index, line)| {
             let trimmed = line.trim_start();
-            if let Some(rest) = trimmed.strip_prefix("- [x] ").or_else(|| trimmed.strip_prefix("- [X] ")) {
+            if let Some(rest) = trimmed
+                .strip_prefix("- [x] ")
+                .or_else(|| trimmed.strip_prefix("- [X] "))
+            {
                 Some(CheckboxLine {
                     checked: true,
                     text: rest.to_string(),
@@ -190,7 +193,10 @@ fn toggle_checkbox_in_body(body: &str, line_index: usize) -> String {
             if i == line_index {
                 let trimmed = line.trim_start();
                 let prefix = &line[..line.len() - trimmed.len()];
-                if let Some(rest) = trimmed.strip_prefix("- [x] ").or_else(|| trimmed.strip_prefix("- [X] ")) {
+                if let Some(rest) = trimmed
+                    .strip_prefix("- [x] ")
+                    .or_else(|| trimmed.strip_prefix("- [X] "))
+                {
                     format!("{prefix}- [ ] {rest}")
                 } else if let Some(rest) = trimmed.strip_prefix("- [ ] ") {
                     format!("{prefix}- [x] {rest}")
@@ -677,7 +683,11 @@ fn render_issue_detail(
     on_pick_issue: EventHandler<SessionSource>,
 ) -> Element {
     let issue_number = issue.number;
-    let checkboxes = issue.body.as_deref().map(parse_checkboxes).unwrap_or_default();
+    let checkboxes = issue
+        .body
+        .as_deref()
+        .map(parse_checkboxes)
+        .unwrap_or_default();
 
     rsx! {
         div { class: "card-detail",

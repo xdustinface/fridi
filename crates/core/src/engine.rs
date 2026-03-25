@@ -83,7 +83,9 @@ impl WorkflowContext {
         self.step_outputs.get(step_name)
     }
 
-    pub fn get_config(&self, key: &str) -> Option<&JsonValue> { self.config.get(key) }
+    pub fn get_config(&self, key: &str) -> Option<&JsonValue> {
+        self.config.get(key)
+    }
 
     /// Build context map for passing to an agent
     pub fn as_agent_context(&self) -> HashMap<String, JsonValue> {
@@ -125,12 +127,18 @@ impl Engine {
     }
 
     /// Subscribe to engine events
-    pub fn subscribe(&self) -> broadcast::Receiver<EngineEvent> { self.event_tx.subscribe() }
+    pub fn subscribe(&self) -> broadcast::Receiver<EngineEvent> {
+        self.event_tx.subscribe()
+    }
 
     /// Get a clone of the event sender for forwarding events from external sources
-    pub fn event_sender(&self) -> broadcast::Sender<EngineEvent> { self.event_tx.clone() }
+    pub fn event_sender(&self) -> broadcast::Sender<EngineEvent> {
+        self.event_tx.clone()
+    }
 
-    fn emit(&self, event: EngineEvent) { let _ = self.event_tx.send(event); }
+    fn emit(&self, event: EngineEvent) {
+        let _ = self.event_tx.send(event);
+    }
 
     /// Execute a workflow to completion, respecting the DAG ordering
     pub async fn execute(
@@ -314,7 +322,9 @@ impl Engine {
 }
 
 impl Default for Engine {
-    fn default() -> Self { Self::new().0 }
+    fn default() -> Self {
+        Self::new().0
+    }
 }
 
 /// Process a step result, returning true if the step succeeded
@@ -431,7 +441,9 @@ mod tests {
                 .insert(step_name.to_string(), result);
         }
 
-        fn call_order(&self) -> Vec<String> { self.call_order.lock().unwrap().clone() }
+        fn call_order(&self) -> Vec<String> {
+            self.call_order.lock().unwrap().clone()
+        }
     }
 
     impl AgentSpawner for MockSpawner {

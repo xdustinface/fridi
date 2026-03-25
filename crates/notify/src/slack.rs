@@ -75,7 +75,9 @@ impl Notifier for SlackNotifier {
         Ok(())
     }
 
-    fn notifier_type(&self) -> &str { "slack" }
+    fn notifier_type(&self) -> &str {
+        "slack"
+    }
 }
 
 #[cfg(test)]

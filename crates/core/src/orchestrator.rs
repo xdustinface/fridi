@@ -232,15 +232,25 @@ impl Orchestrator {
         info!("spawn loop ended");
     }
 
-    pub fn session(&self) -> &Session { &self.session }
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
 
-    pub fn session_mut(&mut self) -> &mut Session { &mut self.session }
+    pub fn session_mut(&mut self) -> &mut Session {
+        &mut self.session
+    }
 
-    pub fn role_configs(&self) -> &[AgentRoleConfig] { &self.role_configs }
+    pub fn role_configs(&self) -> &[AgentRoleConfig] {
+        &self.role_configs
+    }
 
-    pub fn repo(&self) -> &str { &self.repo }
+    pub fn repo(&self) -> &str {
+        &self.repo
+    }
 
-    pub fn session_dir(&self) -> &Path { &self.session_dir }
+    pub fn session_dir(&self) -> &Path {
+        &self.session_dir
+    }
 }
 
 #[cfg(test)]

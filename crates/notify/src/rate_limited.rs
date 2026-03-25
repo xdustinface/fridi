@@ -32,7 +32,9 @@ impl<N: Notifier> Notifier for RateLimitedNotifier<N> {
         self.inner.send(ctx).await
     }
 
-    fn notifier_type(&self) -> &str { self.inner.notifier_type() }
+    fn notifier_type(&self) -> &str {
+        self.inner.notifier_type()
+    }
 }
 
 #[cfg(test)]

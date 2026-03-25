@@ -52,7 +52,9 @@ pub(crate) struct ToastMessage {
 pub(crate) struct Toasts(pub(crate) Signal<Vec<ToastMessage>>);
 
 /// Allocate the next unique toast id.
-fn next_toast_id() -> u64 { NEXT_TOAST_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) }
+fn next_toast_id() -> u64 {
+    NEXT_TOAST_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
 
 /// Push a new toast into the given signal.
 pub(crate) fn push_toast(

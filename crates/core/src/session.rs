@@ -30,22 +30,30 @@ impl SessionId {
         Self(format!("{}-{}-{:04x}", safe_name, date, hash))
     }
 
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl fmt::Display for SessionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(&self.0) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
 impl AsRef<str> for SessionId {
-    fn as_ref(&self) -> &str { &self.0 }
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StepSessionId(String);
 
 impl StepSessionId {
-    pub fn new(step_name: &str, attempt: u32) -> Self { Self(format!("{}-{}", step_name, attempt)) }
+    pub fn new(step_name: &str, attempt: u32) -> Self {
+        Self(format!("{}-{}", step_name, attempt))
+    }
 
     pub fn step_name(&self) -> &str {
         match self.0.rfind('-') {
@@ -63,7 +71,9 @@ impl StepSessionId {
 }
 
 impl fmt::Display for StepSessionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(&self.0) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -234,9 +244,13 @@ impl SessionStore {
         }
     }
 
-    fn session_dir(&self, id: &SessionId) -> PathBuf { self.base_dir.join(id.as_str()) }
+    fn session_dir(&self, id: &SessionId) -> PathBuf {
+        self.base_dir.join(id.as_str())
+    }
 
-    fn session_file(&self, id: &SessionId) -> PathBuf { self.session_dir(id).join("session.json") }
+    fn session_file(&self, id: &SessionId) -> PathBuf {
+        self.session_dir(id).join("session.json")
+    }
 
     pub fn save(&self, session: &Session) -> Result<(), SessionStoreError> {
         let dir = self.session_dir(&session.id);

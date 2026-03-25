@@ -74,7 +74,9 @@ impl Trigger for CronTrigger {
         Ok(())
     }
 
-    fn trigger_type(&self) -> &str { "cron" }
+    fn trigger_type(&self) -> &str {
+        "cron"
+    }
 }
 
 #[cfg(test)]

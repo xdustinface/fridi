@@ -83,7 +83,9 @@ impl WorkflowDag {
         }
     }
 
-    pub fn step_count(&self) -> usize { self.graph.node_count() }
+    pub fn step_count(&self) -> usize {
+        self.graph.node_count()
+    }
 }
 
 #[cfg(test)]

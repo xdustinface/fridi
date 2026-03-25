@@ -61,7 +61,9 @@ impl Trigger for ManualTrigger {
         Ok(())
     }
 
-    fn trigger_type(&self) -> &str { "manual" }
+    fn trigger_type(&self) -> &str {
+        "manual"
+    }
 }
 
 #[cfg(test)]
