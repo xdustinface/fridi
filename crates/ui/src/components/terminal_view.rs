@@ -68,15 +68,22 @@ pub(crate) fn TerminalView(
     }
 
     // Initialize xterm.js when the container div is mounted in the DOM.
+    // Reset tracking state so the delta writer replays all buffered output
+    // into the fresh xterm instance after a tab switch re-mount.
     let tid_for_mount = terminal_id.read().clone();
     let on_mounted = move |_evt: MountedEvent| {
+        written_len.set(0);
+        terminal_ready.set(false);
         let tid = tid_for_mount.clone();
         spawn(async move {
             let js = format!(
                 r#"
                 (function() {{
                     let el = document.getElementById('{tid}');
-                    if (!el || window.fridiTerminals['{tid}']) return;
+                    if (!el) return;
+                    // Dispose any stale instance left over from a previous mount cycle.
+                    let old = window.fridiTerminals['{tid}'];
+                    if (old) {{ old.dispose(); delete window.fridiTerminals['{tid}']; }}
                     let term = new Terminal({{
                         theme: {{
                             background: '#0c0e12',
