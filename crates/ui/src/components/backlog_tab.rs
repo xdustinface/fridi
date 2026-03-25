@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use chrono::Utc;
 use dioxus::prelude::*;
 use fridi_core::backlog::{Backlog, Priority};
+use tracing::error;
 
 const BACKLOG_FILE: &str = ".fridi/backlog.md";
 
@@ -107,10 +108,7 @@ fn build_display_items(backlog: &Backlog) -> Vec<DisplayItem> {
 pub(crate) fn BacklogTab() -> Element {
     let backlog_path = PathBuf::from(BACKLOG_FILE);
     let mut backlog = use_signal(|| {
-        Backlog::load(&backlog_path).unwrap_or_else(|_| {
-            // Fall back to an empty in-memory backlog on load error
-            Backlog::load("/dev/null/nonexistent").unwrap()
-        })
+        Backlog::load(&backlog_path).expect("backlog path is valid")
     });
     let mut input_text = use_signal(String::new);
 
@@ -124,7 +122,7 @@ pub(crate) fn BacklogTab() -> Element {
         backlog.write().add(&text, None);
         input_text.set(String::new());
         if let Err(e) = backlog.read().save() {
-            eprintln!("failed to save backlog: {e}");
+            error!("failed to save backlog: {e}");
         }
     };
 
@@ -166,10 +164,10 @@ pub(crate) fn BacklogTab() -> Element {
                                         checked: item.completed,
                                         onchange: move |_| {
                                             if let Err(e) = backlog.write().toggle(idx) {
-                                                eprintln!("failed to toggle backlog item: {e}");
+                                                error!("failed to toggle backlog item: {e}");
                                             }
                                             if let Err(e) = backlog.read().save() {
-                                                eprintln!("failed to save backlog: {e}");
+                                                error!("failed to save backlog: {e}");
                                             }
                                         },
                                     }
