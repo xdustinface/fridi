@@ -962,4 +962,55 @@ mod tests {
         let result = toggle_checkbox_in_body(body, 0);
         assert_eq!(result, "- [ ] task");
     }
+
+    #[test]
+    fn parse_checkboxes_indented() {
+        let body = "  - [x] indented done\n  - [ ] indented todo";
+        let result = parse_checkboxes(body);
+        assert_eq!(result.len(), 2);
+        assert!(result[0].checked);
+        assert_eq!(result[0].text, "indented done");
+        assert!(!result[1].checked);
+        assert_eq!(result[1].text, "indented todo");
+    }
+
+    #[test]
+    fn parse_checkboxes_empty_body() {
+        let result = parse_checkboxes("");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_checkboxes_ignores_non_checkbox_lines() {
+        let body = "Some text\n- [x] real task\n- not a checkbox\n- [invalid] nope";
+        let result = parse_checkboxes(body);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].text, "real task");
+        assert_eq!(result[0].line_index, 1);
+    }
+
+    #[test]
+    fn toggle_checkbox_round_trip() {
+        let body = "- [ ] task\n- [x] done";
+        let toggled = toggle_checkbox_in_body(body, 0);
+        assert_eq!(toggled, "- [x] task\n- [x] done");
+        let back = toggle_checkbox_in_body(&toggled, 0);
+        assert_eq!(back, "- [ ] task\n- [x] done");
+    }
+
+    #[test]
+    fn toggle_checkbox_non_checkbox_line_unchanged() {
+        let body = "just text\n- [ ] task";
+        let result = toggle_checkbox_in_body(body, 0);
+        assert_eq!(result, "just text\n- [ ] task");
+    }
+
+    #[test]
+    fn parse_checkboxes_tracks_line_indices() {
+        let body = "heading\n\n- [x] first\nsome text\n- [ ] second";
+        let result = parse_checkboxes(body);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].line_index, 2);
+        assert_eq!(result[1].line_index, 4);
+    }
 }
