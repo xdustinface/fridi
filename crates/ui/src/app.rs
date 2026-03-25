@@ -11,6 +11,7 @@ use tracing::error;
 
 use crate::components::backlog_tab::BacklogTab;
 use crate::components::home_dashboard::HomeDashboard;
+use crate::components::quick_capture::QuickCapture;
 use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::tab_bar::TabBar;
 use crate::components::workflow_view::WorkflowView;
@@ -105,6 +106,7 @@ pub(crate) fn App() -> Element {
     });
 
     let mut showing_creator = use_signal(|| false);
+    let mut showing_quick_capture = use_signal(|| false);
 
     // Engine event bridge: receiver is set when a workflow starts
     let mut engine_rx: Signal<Option<broadcast::Receiver<EngineEvent>>> = use_signal(|| None);
@@ -307,8 +309,25 @@ pub(crate) fn App() -> Element {
         _ => None,
     };
 
+    // Derive context label for quick capture from the active session tab
+    let quick_capture_context: Option<String> = {
+        let tabs_read = tabs.read();
+        session_idx.and_then(|idx| tabs_read.get(idx).map(|tab| tab.workflow_name.clone()))
+    };
+
+    let on_global_keydown = move |evt: KeyboardEvent| {
+        if evt.modifiers().meta() && evt.key() == Key::Character("i".to_string()) {
+            evt.prevent_default();
+            showing_quick_capture.toggle();
+        }
+    };
+
+    let on_dismiss_quick_capture = move |()| {
+        showing_quick_capture.set(false);
+    };
+
     rsx! {
-        div { class: "app-layout",
+        div { class: "app-layout", onkeydown: on_global_keydown, tabindex: "0",
             TabBar {
                 tabs: tabs.read().clone(),
                 active: session_idx,
@@ -346,6 +365,12 @@ pub(crate) fn App() -> Element {
                     repo: default_repo.clone(),
                     on_create: on_create_session,
                     on_cancel: on_cancel_creator,
+                }
+            }
+            if *showing_quick_capture.read() {
+                QuickCapture {
+                    context: quick_capture_context.clone(),
+                    on_dismiss: on_dismiss_quick_capture,
                 }
             }
         }
