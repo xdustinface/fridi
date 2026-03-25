@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
@@ -268,8 +269,6 @@ pub fn auto_pick_issue(repo: &str) -> Result<Option<GitHubIssue>, GitHubError> {
 }
 
 pub fn update_issue_body(repo: &str, issue_number: u64, new_body: &str) -> Result<(), GitHubError> {
-    use std::io::Write;
-
     let payload = serde_json::json!({ "body": new_body }).to_string();
     let mut child = Command::new("gh")
         .args([

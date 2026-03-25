@@ -223,7 +223,11 @@ fn open_url(url: &str) {
     }
     let url = url.to_string();
     spawn(async move {
-        let _ = tokio::task::spawn_blocking(move || open::that(&url)).await;
+        match tokio::task::spawn_blocking(move || open::that(&url)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => tracing::warn!("Failed to open URL: {e}"),
+            Err(e) => tracing::warn!("Failed to open URL: {e}"),
+        }
     });
 }
 
