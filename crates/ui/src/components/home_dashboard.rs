@@ -239,7 +239,6 @@ fn get_effective_body(issue: &IssueSummary, pending: &HashMap<u64, String>) -> S
         .unwrap_or_else(|| issue.body.clone().unwrap_or_default())
 }
 
-
 #[component]
 pub(crate) fn HomeDashboard(
     repo: Option<String>,
