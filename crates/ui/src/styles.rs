@@ -1038,36 +1038,38 @@ body {
     color: var(--text-tertiary);
 }
 
-/* Cache freshness indicator */
-.freshness-indicator {
+/* Refresh button with countdown ring */
+.refresh-btn-container {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.refresh-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: var(--space-2);
-}
-
-.freshness-dot {
-    width: 8px;
-    height: 8px;
+    justify-content: center;
     border-radius: 50%;
-    flex-shrink: 0;
+    transition: background-color var(--transition-normal);
 }
 
-.freshness-dot.success {
-    background-color: var(--status-success);
+.refresh-btn:hover {
+    background-color: var(--surface-3);
 }
 
-.freshness-dot.warning {
-    background-color: var(--status-warning);
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
-.freshness-dot.error {
-    background-color: var(--status-error);
-}
-
-.freshness-label {
-    font-size: 11px;
-    color: var(--text-tertiary);
+.refresh-spin {
+    transform-origin: 12px 12px;
+    animation: spin 1s linear infinite;
 }
 
 /* Quick actions strip */

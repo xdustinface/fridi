@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
-use std::time::Instant;
 
 use dioxus::prelude::*;
 use fridi_core::github::{self, CiStatus};
@@ -83,28 +82,14 @@ fn relative_time(iso: &str) -> String {
     }
 }
 
-/// Returns (dot CSS class, label text) for the cache freshness indicator.
-fn freshness_indicator(
-    is_refreshing: bool,
-    last_fetched_at: Option<Instant>,
-) -> (&'static str, String) {
+/// Returns the stroke color for the refresh button ring based on state.
+fn ring_color(is_refreshing: bool, seconds_since_fetch: u16) -> &'static str {
     if is_refreshing {
-        return ("freshness-dot warning", "Refreshing...".into());
-    }
-    match last_fetched_at {
-        Some(t) => {
-            let elapsed = t.elapsed().as_secs();
-            if elapsed < 60 {
-                ("freshness-dot success", format!("Updated {elapsed}s ago"))
-            } else if elapsed < 120 {
-                let mins = elapsed / 60;
-                ("freshness-dot success", format!("Updated {mins}m ago"))
-            } else {
-                let mins = elapsed / 60;
-                ("freshness-dot error", format!("Stale ({mins}m ago)"))
-            }
-        }
-        None => ("freshness-dot warning", "Loading...".into()),
+        "var(--accent)"
+    } else if seconds_since_fetch > 120 {
+        "var(--status-error)"
+    } else {
+        "var(--accent)"
     }
 }
 
@@ -143,12 +128,14 @@ pub(crate) fn HomeDashboard(
     let mut state = use_signal(|| initial_state);
     let mut pick_state = use_signal(|| PickState::Idle);
     let mut removing_labels: Signal<HashSet<u64>> = use_signal(HashSet::new);
-    let mut last_fetched_at: Signal<Option<Instant>> = use_signal(|| None);
     let mut is_refreshing = use_signal(|| true);
+    let mut seconds_since_fetch: Signal<u16> = use_signal(|| 0);
+    let mut fetch_failed = use_signal(|| false);
     let repo_clone = repo.clone();
     let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
-    // Fetch on mount and poll every 60s
+    // Fetch on mount and poll every 60s; also re-fetches when seconds_since_fetch
+    // is manually reset to 0 (via the refresh button) while a poll sleep is active.
     use_coroutine(move |_: UnboundedReceiver<()>| {
         let repo = repo_clone.clone();
         let work_dir = work_dir.clone();
@@ -173,14 +160,31 @@ pub(crate) fn HomeDashboard(
                         let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
                         *cache.lock().unwrap() = Some(data.clone());
                         state.set(FetchState::Loaded(data));
-                        last_fetched_at.set(Some(Instant::now()));
+                        seconds_since_fetch.set(0);
+                        fetch_failed.set(false);
                     }
-                    Ok(Err(e)) => state.set(FetchState::Error(e.to_string())),
-                    Err(e) => state.set(FetchState::Error(e.to_string())),
+                    Ok(Err(e)) => {
+                        state.set(FetchState::Error(e.to_string()));
+                        fetch_failed.set(true);
+                    }
+                    Err(e) => {
+                        state.set(FetchState::Error(e.to_string()));
+                        fetch_failed.set(true);
+                    }
                 }
                 is_refreshing.set(false);
 
                 tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)).await;
+            }
+        }
+    });
+
+    // Tick every second to update the countdown ring
+    use_coroutine(move |_: UnboundedReceiver<()>| async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            if !*is_refreshing.read() {
+                seconds_since_fetch += 1;
             }
         }
     });
@@ -202,15 +206,104 @@ pub(crate) fn HomeDashboard(
             let has_repo = repo.as_ref().is_some_and(|r| !r.is_empty());
             let is_picking = *pick_state.read() == PickState::Loading;
 
-            let (dot_class, freshness_label) =
-                freshness_indicator(*is_refreshing.read(), *last_fetched_at.read());
+            let refreshing = *is_refreshing.read();
+            let secs = *seconds_since_fetch.read();
+            let failed = *fetch_failed.read();
+
+            let circumference: f64 = 2.0 * std::f64::consts::PI * 10.0;
+            let progress = 1.0 - (secs as f64 / POLL_INTERVAL_SECS as f64).min(1.0);
+            let offset = circumference * (1.0 - progress);
+            let stroke = if failed && !refreshing {
+                "var(--status-error)"
+            } else {
+                ring_color(refreshing, secs)
+            };
+            let spin_class = if refreshing { "refresh-spin" } else { "" };
 
             rsx! {
                 div { class: "dashboard",
-                    // Cache freshness indicator
-                    div { class: "freshness-indicator",
-                        span { class: "{dot_class}" }
-                        span { class: "freshness-label", "{freshness_label}" }
+                    // Refresh button with countdown ring
+                    div { class: "refresh-btn-container",
+                        button {
+                            class: "refresh-btn",
+                            title: if refreshing { "Refreshing..." } else { "Click to refresh" },
+                            onclick: {
+                                let repo = repo.clone();
+                                move |_| {
+                                    if *is_refreshing.read() {
+                                        return;
+                                    }
+                                    seconds_since_fetch.set(0);
+                                    is_refreshing.set(true);
+                                    let repo = repo.clone();
+                                    let work_dir = std::env::current_dir()
+                                        .unwrap_or_else(|_| PathBuf::from("."));
+                                    spawn(async move {
+                                        let overview = {
+                                            let repo = repo.clone();
+                                            let work_dir = work_dir.clone();
+                                            tokio::task::spawn_blocking(move || {
+                                                let repo_str = repo.as_deref().unwrap_or("");
+                                                let store = SessionStore::new(SESSIONS_DIR);
+                                                fridi_core::project_overview::fetch_project_overview(
+                                                    repo_str, &work_dir, &store,
+                                                )
+                                            })
+                                            .await
+                                        };
+                                        match overview {
+                                            Ok(Ok(data)) => {
+                                                let cache = CACHED_OVERVIEW
+                                                    .get_or_init(|| Mutex::new(None));
+                                                *cache.lock().unwrap() = Some(data.clone());
+                                                state.set(FetchState::Loaded(data));
+                                                seconds_since_fetch.set(0);
+                                                fetch_failed.set(false);
+                                            }
+                                            Ok(Err(e)) => {
+                                                state.set(FetchState::Error(e.to_string()));
+                                                fetch_failed.set(true);
+                                            }
+                                            Err(e) => {
+                                                state.set(FetchState::Error(e.to_string()));
+                                                fetch_failed.set(true);
+                                            }
+                                        }
+                                        is_refreshing.set(false);
+                                    });
+                                }
+                            },
+                            svg {
+                                width: "28",
+                                height: "28",
+                                view_box: "0 0 24 24",
+                                circle {
+                                    cx: "12", cy: "12", r: "10",
+                                    fill: "none",
+                                    stroke: "var(--surface-3)",
+                                    stroke_width: "2",
+                                }
+                                circle {
+                                    cx: "12", cy: "12", r: "10",
+                                    fill: "none",
+                                    stroke: "{stroke}",
+                                    stroke_width: "2",
+                                    stroke_dasharray: "{circumference}",
+                                    stroke_dashoffset: "{offset}",
+                                    stroke_linecap: "round",
+                                    transform: "rotate(-90 12 12)",
+                                }
+                                text {
+                                    x: "12", y: "12",
+                                    text_anchor: "middle",
+                                    dominant_baseline: "central",
+                                    font_size: "10",
+                                    fill: "var(--text-secondary)",
+                                    class: "{spin_class}",
+                                    "\u{21BB}"
+                                }
+                            }
+                        }
                     }
 
                     // Quick actions strip
