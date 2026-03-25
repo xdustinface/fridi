@@ -172,22 +172,18 @@ pub(crate) fn WorkflowView(session: Session, live_state: Option<SessionLiveState
         .map(|ls| ls.notifications.clone())
         .unwrap_or_default();
 
-    // Push new notifications as toasts inside an effect so we don't mutate
-    // global signal state during the render path.
-    use_effect(move || {
-        let already_shown = *shown_count.read();
-        if notifications.len() > already_shown {
-            for msg in &notifications[already_shown..] {
-                let level = if msg.starts_with("Failed:") {
-                    ToastLevel::Error
-                } else {
-                    ToastLevel::Warning
-                };
-                push_toast(&mut toasts, msg.clone(), level);
-            }
-            shown_count.set(notifications.len());
+    let already_shown = *shown_count.read();
+    if notifications.len() > already_shown {
+        for msg in &notifications[already_shown..] {
+            let level = if msg.starts_with("Failed:") {
+                ToastLevel::Error
+            } else {
+                ToastLevel::Warning
+            };
+            push_toast(&mut toasts, msg.clone(), level);
         }
-    });
+        shown_count.set(notifications.len());
+    }
 
     rsx! {
         crate::components::split_pane::SplitPane {
