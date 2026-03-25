@@ -57,9 +57,7 @@ pub trait AgentHandle: Send + Sync {
     fn collected_output(&self) -> String;
     fn session_id(&self) -> Option<&str>;
     /// Returns a handle for resizing the underlying PTY, if applicable.
-    fn resizer(&self) -> Option<PtyResizer> {
-        None
-    }
+    fn resizer(&self) -> Option<PtyResizer> { None }
 }
 
 #[async_trait]

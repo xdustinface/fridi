@@ -7,15 +7,11 @@ use crate::traits::{NotificationContext, Notifier, NotifyError};
 pub struct ConsoleNotifier;
 
 impl ConsoleNotifier {
-    pub fn new() -> Self {
-        Self
-    }
+    pub fn new() -> Self { Self }
 }
 
 impl Default for ConsoleNotifier {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 #[async_trait]
@@ -42,9 +38,7 @@ impl Notifier for ConsoleNotifier {
         Ok(())
     }
 
-    fn notifier_type(&self) -> &str {
-        "console"
-    }
+    fn notifier_type(&self) -> &str { "console" }
 }
 
 #[cfg(test)]

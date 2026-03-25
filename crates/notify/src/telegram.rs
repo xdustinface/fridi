@@ -86,9 +86,7 @@ impl Notifier for TelegramNotifier {
         Ok(())
     }
 
-    fn notifier_type(&self) -> &str {
-        "telegram"
-    }
+    fn notifier_type(&self) -> &str { "telegram" }
 }
 
 /// Escape special characters for Telegram MarkdownV2

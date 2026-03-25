@@ -144,9 +144,7 @@ impl Backlog {
     }
 
     /// Return a slice of all items.
-    pub fn items(&self) -> &[BacklogItem] {
-        &self.items
-    }
+    pub fn items(&self) -> &[BacklogItem] { &self.items }
 }
 
 /// Extract `#tag` tokens from text. Operates on raw bytes for performance;
@@ -181,9 +179,7 @@ fn extract_tags(text: &str) -> Vec<String> {
     tags
 }
 
-fn is_tag_char(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
-}
+fn is_tag_char(b: u8) -> bool { b.is_ascii_alphanumeric() || b == b'_' || b == b'-' }
 
 /// Sanitize a metadata field value for safe embedding in HTML comments.
 /// Replaces spaces with hyphens (to avoid breaking `rfind(' ')` parsing)

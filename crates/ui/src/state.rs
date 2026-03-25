@@ -78,6 +78,4 @@ pub(crate) fn load_sessions_with_recovery(store: &SessionStore) -> Vec<Session> 
 }
 
 /// Load window state from the given path.
-pub(crate) fn load_window_state(state_path: &Path) -> WindowState {
-    WindowState::load(state_path)
-}
+pub(crate) fn load_window_state(state_path: &Path) -> WindowState { WindowState::load(state_path) }

@@ -173,9 +173,7 @@ impl PtyProcess {
         }
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> {
-        self.output_tx.subscribe()
-    }
+    pub fn subscribe(&self) -> broadcast::Receiver<AgentOutput> { self.output_tx.subscribe() }
 
     /// Returns the pre-subscribed receiver that was created before the reader
     /// thread started, guaranteeing no output is missed. Returns `None` if
@@ -237,9 +235,7 @@ impl PtyProcess {
         Ok(())
     }
 
-    pub fn is_running(&self) -> bool {
-        self.running.load(Ordering::Relaxed)
-    }
+    pub fn is_running(&self) -> bool { self.running.load(Ordering::Relaxed) }
 
     pub async fn collected_output(&self) -> String {
         let collected = self.collected_output.lock().await;
