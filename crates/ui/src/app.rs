@@ -9,6 +9,7 @@ use serde_yaml::to_string as to_yaml;
 use tokio::sync::broadcast;
 use tracing::error;
 
+use crate::components::backlog_tab::BacklogTab;
 use crate::components::home_dashboard::HomeDashboard;
 use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::tab_bar::TabBar;
@@ -20,6 +21,14 @@ use crate::workflow_runner::WorkflowRunner;
 const SESSIONS_DIR: &str = ".fridi/sessions";
 const AGENTS_DIR: &str = "agents";
 const STATE_FILE: &str = ".fridi/fridi-state.json";
+
+/// Which pane is currently shown in the main content area.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ActivePane {
+    Home,
+    Backlog,
+    Session(usize),
+}
 
 /// Repo detected at startup, provided via Dioxus context.
 #[derive(Clone)]
@@ -75,22 +84,25 @@ pub(crate) fn App() -> Element {
         }
     });
 
-    // Track which tab is active; None means home tab
-    let mut active_tab = use_signal(|| {
+    let mut active_pane = use_signal(|| {
         let sessions = state::load_sessions_with_recovery(&store.read());
         let repo_key = default_repo.clone().unwrap_or_default();
         let ws = state::load_window_state(&state_path.read());
         let (restored, active_idx) = state::restore_tabs(&ws, &sessions, &repo_key);
         if restored.is_empty() {
             let t = tabs.read();
-            if t.is_empty() { None } else { Some(0) }
+            if t.is_empty() {
+                ActivePane::Home
+            } else {
+                ActivePane::Session(0)
+            }
         } else {
-            active_idx
+            match active_idx {
+                Some(idx) => ActivePane::Session(idx),
+                None => ActivePane::Home,
+            }
         }
     });
-
-    // Derive home state from active_tab rather than maintaining a separate signal
-    let is_home = use_memo(move || active_tab.read().is_none());
 
     let mut showing_creator = use_signal(|| false);
 
@@ -112,21 +124,26 @@ pub(crate) fn App() -> Element {
     // Load the full session for the active tab
     let active_session: Option<Session> = {
         let tabs_read = tabs.read();
-        let active = *active_tab.read();
-        active.and_then(|idx| {
-            tabs_read
+        let pane = *active_pane.read();
+        match pane {
+            ActivePane::Session(idx) => tabs_read
                 .get(idx)
-                .and_then(|tab| store.read().load(&tab.session_id).ok())
-        })
+                .and_then(|tab| store.read().load(&tab.session_id).ok()),
+            _ => None,
+        }
     };
 
     let on_select_home = move |()| {
-        active_tab.set(None);
+        active_pane.set(ActivePane::Home);
+    };
+
+    let on_select_backlog = move |()| {
+        active_pane.set(ActivePane::Backlog);
     };
 
     let repo_for_select = default_repo.clone();
     let on_select_tab = move |idx: usize| {
-        active_tab.set(Some(idx));
+        active_pane.set(ActivePane::Session(idx));
         // Persist active tab change
         let tabs_read = tabs.read();
         if let Some(tab) = tabs_read.get(idx) {
@@ -154,14 +171,16 @@ pub(crate) fn App() -> Element {
 
             drop(t);
             if len == 0 {
-                // No session tabs left, go to home
-                active_tab.set(None);
+                active_pane.set(ActivePane::Home);
             } else {
-                let current = active_tab.read().unwrap_or(0);
+                let current = match *active_pane.read() {
+                    ActivePane::Session(i) => i,
+                    _ => 0,
+                };
                 if current >= len {
-                    active_tab.set(Some(len - 1));
+                    active_pane.set(ActivePane::Session(len - 1));
                 } else if current > idx {
-                    active_tab.set(Some(current - 1));
+                    active_pane.set(ActivePane::Session(current - 1));
                 }
             }
         }
@@ -262,7 +281,7 @@ pub(crate) fn App() -> Element {
             let new_idx = t.len();
             t.push(tab);
             drop(t);
-            active_tab.set(Some(new_idx));
+            active_pane.set(ActivePane::Session(new_idx));
             showing_creator.set(false);
 
             let repo_key = default_repo.clone().unwrap_or_default();
@@ -280,19 +299,29 @@ pub(crate) fn App() -> Element {
         showing_creator.set(false);
     };
 
+    let current_pane = *active_pane.read();
+    let is_home = current_pane == ActivePane::Home;
+    let is_backlog = current_pane == ActivePane::Backlog;
+    let session_idx = match current_pane {
+        ActivePane::Session(idx) => Some(idx),
+        _ => None,
+    };
+
     rsx! {
         div { class: "app-layout",
             TabBar {
                 tabs: tabs.read().clone(),
-                active: *active_tab.read(),
-                home_active: *is_home.read(),
+                active: session_idx,
+                home_active: is_home,
+                backlog_active: is_backlog,
                 on_select: on_select_tab,
                 on_select_home,
+                on_select_backlog,
                 on_close: on_close_tab,
                 on_new: on_new_tab,
             }
             div { class: "main-content",
-                if *is_home.read() {
+                if is_home {
                     HomeDashboard {
                         key: "{default_repo.clone().unwrap_or_default()}",
                         repo: default_repo.clone(),
@@ -301,6 +330,8 @@ pub(crate) fn App() -> Element {
                         on_show_pr_picker: on_new_tab,
                         on_show_creator: on_new_tab,
                     }
+                } else if is_backlog {
+                    BacklogTab {}
                 } else if let Some(session) = active_session {
                     WorkflowView {
                         session,

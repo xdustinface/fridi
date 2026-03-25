@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 pub mod backlog;
 pub mod dag;
 pub mod engine;

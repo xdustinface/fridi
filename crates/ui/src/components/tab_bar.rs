@@ -8,12 +8,20 @@ pub(crate) fn TabBar(
     tabs: Vec<TabInfo>,
     active: Option<usize>,
     home_active: bool,
+    backlog_active: bool,
     on_select: EventHandler<usize>,
     on_select_home: EventHandler<()>,
+    on_select_backlog: EventHandler<()>,
     on_close: EventHandler<usize>,
     on_new: EventHandler<()>,
 ) -> Element {
     let home_class = if home_active {
+        "tab home-tab active"
+    } else {
+        "tab home-tab"
+    };
+
+    let backlog_class = if backlog_active {
         "tab home-tab active"
     } else {
         "tab home-tab"
@@ -26,9 +34,14 @@ pub(crate) fn TabBar(
                 onclick: move |_| on_select_home.call(()),
                 span { class: "tab-name", "Home" }
             }
+            div {
+                class: "{backlog_class}",
+                onclick: move |_| on_select_backlog.call(()),
+                span { class: "tab-name", "Backlog" }
+            }
             for (idx , tab) in tabs.iter().enumerate() {
                 {
-                    let is_active = !home_active && active == Some(idx);
+                    let is_active = !home_active && !backlog_active && active == Some(idx);
                     let tab_class = if is_active { "tab active" } else { "tab" };
                     let status_class = match &tab.status {
                         SessionStatus::Running => "running",

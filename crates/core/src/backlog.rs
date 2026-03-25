@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 
 /// Priority level for a backlog item.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Priority {
+pub enum Priority {
     Normal,
     Important,
     Urgent,
@@ -23,13 +23,13 @@ impl fmt::Display for Priority {
 
 /// A single backlog entry with metadata parsed from markdown.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BacklogItem {
-    pub(crate) text: String,
-    pub(crate) tags: Vec<String>,
-    pub(crate) priority: Priority,
-    pub(crate) context: Option<String>,
-    pub(crate) created_at: DateTime<Utc>,
-    pub(crate) completed: bool,
+pub struct BacklogItem {
+    pub text: String,
+    pub tags: Vec<String>,
+    pub priority: Priority,
+    pub context: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub completed: bool,
 }
 
 impl BacklogItem {
@@ -70,15 +70,20 @@ pub struct Backlog {
 }
 
 impl Backlog {
+    /// Create an empty backlog that will save to the given path.
+    pub fn empty(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            items: Vec::new(),
+        }
+    }
+
     /// Load a backlog from the given file path. Returns an empty backlog if the
     /// file does not exist.
     pub fn load(path: impl Into<PathBuf>) -> Result<Self, BacklogError> {
         let path = path.into();
         if !path.exists() {
-            return Ok(Self {
-                path,
-                items: Vec::new(),
-            });
+            return Ok(Self::empty(path));
         }
 
         let content = fs::read_to_string(&path)?;
@@ -121,7 +126,7 @@ impl Backlog {
     }
 
     /// Remove an item by index.
-    pub(crate) fn remove(&mut self, index: usize) -> Result<BacklogItem, BacklogError> {
+    pub fn remove(&mut self, index: usize) -> Result<BacklogItem, BacklogError> {
         if index >= self.items.len() {
             return Err(BacklogError::InvalidIndex(index));
         }
@@ -129,7 +134,7 @@ impl Backlog {
     }
 
     /// Toggle the completed state of an item by index.
-    pub(crate) fn toggle(&mut self, index: usize) -> Result<(), BacklogError> {
+    pub fn toggle(&mut self, index: usize) -> Result<(), BacklogError> {
         let item = self
             .items
             .get_mut(index)
@@ -139,7 +144,7 @@ impl Backlog {
     }
 
     /// Return a slice of all items.
-    pub(crate) fn items(&self) -> &[BacklogItem] { &self.items }
+    pub fn items(&self) -> &[BacklogItem] { &self.items }
 }
 
 /// Extract `#tag` tokens from text. Operates on raw bytes for performance;
