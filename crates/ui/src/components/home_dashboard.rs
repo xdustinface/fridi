@@ -82,14 +82,27 @@ fn relative_time(iso: &str) -> String {
     }
 }
 
-/// Returns the stroke color for the refresh button ring based on state.
-fn ring_color(is_refreshing: bool, seconds_since_fetch: u16) -> &'static str {
+/// Returns the fill color for the refresh status dot based on state.
+fn dot_fill_color(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> &'static str {
     if is_refreshing {
-        "var(--accent)"
-    } else if seconds_since_fetch > 120 {
+        "var(--status-warning)"
+    } else if failed || seconds_since_fetch > 120 {
         "var(--status-error)"
+    } else if seconds_since_fetch <= 60 {
+        "var(--status-success)"
     } else {
-        "var(--accent)"
+        "var(--text-tertiary)"
+    }
+}
+
+/// Returns the tooltip text for the refresh status dot.
+fn dot_tooltip(is_refreshing: bool, failed: bool, seconds_since_fetch: u16) -> String {
+    if is_refreshing {
+        "Refreshing...".to_string()
+    } else if failed || seconds_since_fetch > 120 {
+        "Stale — click to refresh".to_string()
+    } else {
+        format!("Updated {seconds_since_fetch}s ago")
     }
 }
 
@@ -210,23 +223,19 @@ pub(crate) fn HomeDashboard(
             let secs = *seconds_since_fetch.read();
             let failed = *fetch_failed.read();
 
-            let circumference: f64 = 2.0 * std::f64::consts::PI * 10.0;
+            let circumference: f64 = 2.0 * std::f64::consts::PI * 9.0;
             let progress = 1.0 - (secs as f64 / POLL_INTERVAL_SECS as f64).min(1.0);
             let offset = circumference * (1.0 - progress);
-            let stroke = if failed && !refreshing {
-                "var(--status-error)"
-            } else {
-                ring_color(refreshing, secs)
-            };
-            let spin_class = if refreshing { "refresh-spin" } else { "" };
+            let fill_color = dot_fill_color(refreshing, failed, secs);
+            let tooltip_text = dot_tooltip(refreshing, failed, secs);
+            let pulse_class = if refreshing { "refresh-pulse" } else { "" };
 
             rsx! {
                 div { class: "dashboard",
-                    // Refresh button with countdown ring
+                    // Refresh status dot with countdown ring
                     div { class: "refresh-btn-container",
                         button {
                             class: "refresh-btn",
-                            title: if refreshing { "Refreshing..." } else { "Click to refresh" },
                             onclick: {
                                 let repo = repo.clone();
                                 move |_| {
@@ -274,33 +283,33 @@ pub(crate) fn HomeDashboard(
                                 }
                             },
                             svg {
-                                width: "28",
-                                height: "28",
-                                view_box: "0 0 24 24",
+                                width: "20",
+                                height: "20",
+                                view_box: "0 0 20 20",
+                                title { "{tooltip_text}" }
+                                // Filled status dot
                                 circle {
-                                    cx: "12", cy: "12", r: "10",
+                                    cx: "10", cy: "10", r: "7",
+                                    fill: "{fill_color}",
+                                    class: "{pulse_class}",
+                                }
+                                // Outer ring background
+                                circle {
+                                    cx: "10", cy: "10", r: "9",
                                     fill: "none",
                                     stroke: "var(--surface-3)",
-                                    stroke_width: "2",
+                                    stroke_width: "1.5",
                                 }
+                                // Outer countdown ring (progress arc)
                                 circle {
-                                    cx: "12", cy: "12", r: "10",
+                                    cx: "10", cy: "10", r: "9",
                                     fill: "none",
-                                    stroke: "{stroke}",
-                                    stroke_width: "2",
+                                    stroke: "var(--text-secondary)",
+                                    stroke_width: "1.5",
                                     stroke_dasharray: "{circumference}",
                                     stroke_dashoffset: "{offset}",
                                     stroke_linecap: "round",
-                                    transform: "rotate(-90 12 12)",
-                                }
-                                text {
-                                    x: "12", y: "12",
-                                    text_anchor: "middle",
-                                    dominant_baseline: "central",
-                                    font_size: "10",
-                                    fill: "var(--text-secondary)",
-                                    class: "{spin_class}",
-                                    "\u{21BB}"
+                                    transform: "rotate(-90 10 10)",
                                 }
                             }
                         }

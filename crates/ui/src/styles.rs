@@ -1038,7 +1038,7 @@ body {
     color: var(--text-tertiary);
 }
 
-/* Refresh button with countdown ring */
+/* Refresh status dot with countdown ring */
 .refresh-btn-container {
     display: flex;
     justify-content: flex-end;
@@ -1049,8 +1049,8 @@ body {
     border: none;
     cursor: pointer;
     padding: 0;
-    width: 28px;
-    height: 28px;
+    width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1062,14 +1062,13 @@ body {
     background-color: var(--surface-3);
 }
 
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+@keyframes pulse-glow {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.4); }
 }
 
-.refresh-spin {
-    transform-origin: 12px 12px;
-    animation: spin 1s linear infinite;
+.refresh-pulse {
+    animation: pulse-glow 1.5s ease-in-out infinite;
 }
 
 /* Quick actions strip */
