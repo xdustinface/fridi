@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
@@ -87,6 +88,7 @@ pub(crate) fn HomeDashboard(
 ) -> Element {
     let mut state = use_signal(|| FetchState::Loading);
     let mut pick_state = use_signal(|| PickState::Idle);
+    let mut removing_labels: Signal<HashSet<u64>> = use_signal(HashSet::new);
     let repo_clone = repo.clone();
     let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
@@ -200,12 +202,46 @@ pub(crate) fn HomeDashboard(
                         count: overview.open_prs.len(),
                         children: rsx! {
                             for pr in &overview.open_prs {
-                                div { class: "dashboard-row", key: "pr-{pr.number}",
-                                    span { class: "dashboard-number", "#{pr.number}" }
-                                    span { class: "dashboard-title", "{pr.title}" }
-                                    span { class: "dashboard-branch", "{pr.branch}" }
-                                    span { class: ci_badge_class(&pr.ci_status), "{ci_badge_label(&pr.ci_status)}" }
-                                    span { class: "dashboard-time", "{relative_time(&pr.updated_at)}" }
+                                {
+                                    let needs_human = pr.labels.iter().any(|l| l == "needs-human");
+                                    let pr_number = pr.number;
+                                    let is_removing = removing_labels.read().contains(&pr_number);
+                                    rsx! {
+                                        div { class: "dashboard-row", key: "pr-{pr_number}",
+                                            span { class: "dashboard-number", "#{pr.number}" }
+                                            span { class: "dashboard-title", "{pr.title}" }
+                                            span { class: "dashboard-branch", "{pr.branch}" }
+                                            span { class: ci_badge_class(&pr.ci_status), "{ci_badge_label(&pr.ci_status)}" }
+                                            if needs_human {
+                                                button {
+                                                    class: "dashboard-ready-btn",
+                                                    disabled: is_removing || !has_repo,
+                                                    onclick: {
+                                                        let repo_str = repo.clone().unwrap_or_default();
+                                                        move |_| {
+                                                            let r = repo_str.clone();
+                                                            removing_labels.write().insert(pr_number);
+                                                            spawn(async move {
+                                                                let result = tokio::task::spawn_blocking(move || {
+                                                                    github::remove_pr_label(&r, pr_number, "needs-human")
+                                                                }).await;
+                                                                removing_labels.write().remove(&pr_number);
+                                                                if let Ok(Ok(())) = result {
+                                                                    if let FetchState::Loaded(ref mut data) = *state.write() {
+                                                                        if let Some(pr) = data.open_prs.iter_mut().find(|p| p.number == pr_number) {
+                                                                            pr.labels.retain(|l| l != "needs-human");
+                                                                        }
+                                                                    }
+                                                                }
+                                                            });
+                                                        }
+                                                    },
+                                                    if is_removing { "Removing..." } else { "Ready" }
+                                                }
+                                            }
+                                            span { class: "dashboard-time", "{relative_time(&pr.updated_at)}" }
+                                        }
+                                    }
                                 }
                             }
                         },

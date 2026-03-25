@@ -32,6 +32,7 @@ pub struct PrSummary {
     pub branch: String,
     pub ci_status: CiStatus,
     pub updated_at: String,
+    pub labels: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +85,7 @@ fn fetch_pr_summaries(repo: &str) -> Result<Vec<PrSummary>, GitHubError> {
             branch: pr.head_ref_name,
             ci_status: CiStatus::from_checks(&pr.status_check_rollup),
             updated_at: pr.updated_at,
+            labels: pr.labels.into_iter().map(|l| l.name).collect(),
         })
         .collect())
 }
