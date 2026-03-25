@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
 use dioxus::prelude::*;
 use fridi_core::github::{self, CiStatus};
@@ -64,6 +65,31 @@ fn relative_time(iso: &str) -> String {
     }
 }
 
+/// Returns (dot CSS class, label text) for the cache freshness indicator.
+fn freshness_indicator(
+    is_refreshing: bool,
+    last_fetched_at: Option<Instant>,
+) -> (&'static str, String) {
+    if is_refreshing {
+        return ("freshness-dot warning", "Refreshing...".into());
+    }
+    match last_fetched_at {
+        Some(t) => {
+            let elapsed = t.elapsed().as_secs();
+            if elapsed < 60 {
+                ("freshness-dot success", format!("Updated {elapsed}s ago"))
+            } else if elapsed < 120 {
+                let mins = elapsed / 60;
+                ("freshness-dot success", format!("Updated {mins}m ago"))
+            } else {
+                let mins = elapsed / 60;
+                ("freshness-dot error", format!("Stale ({mins}m ago)"))
+            }
+        }
+        None => ("freshness-dot warning", "Loading...".into()),
+    }
+}
+
 fn ci_badge_class(status: &CiStatus) -> &'static str {
     match status {
         CiStatus::Passed => "ci-badge passed",
@@ -99,6 +125,8 @@ pub(crate) fn HomeDashboard(
     let mut state = use_signal(|| initial_state);
     let mut pick_state = use_signal(|| PickState::Idle);
     let mut removing_labels: Signal<HashSet<u64>> = use_signal(HashSet::new);
+    let mut last_fetched_at: Signal<Option<Instant>> = use_signal(|| None);
+    let mut is_refreshing = use_signal(|| true);
     let repo_clone = repo.clone();
     let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
@@ -108,6 +136,7 @@ pub(crate) fn HomeDashboard(
         let work_dir = work_dir.clone();
         async move {
             loop {
+                is_refreshing.set(true);
                 let overview = {
                     let repo = repo.clone();
                     let work_dir = work_dir.clone();
@@ -126,10 +155,12 @@ pub(crate) fn HomeDashboard(
                         let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
                         *cache.lock().unwrap() = Some(data.clone());
                         state.set(FetchState::Loaded(data));
+                        last_fetched_at.set(Some(Instant::now()));
                     }
                     Ok(Err(e)) => state.set(FetchState::Error(e.to_string())),
                     Err(e) => state.set(FetchState::Error(e.to_string())),
                 }
+                is_refreshing.set(false);
 
                 tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)).await;
             }
@@ -153,8 +184,17 @@ pub(crate) fn HomeDashboard(
             let has_repo = repo.as_ref().is_some_and(|r| !r.is_empty());
             let is_picking = *pick_state.read() == PickState::Loading;
 
+            let (dot_class, freshness_label) =
+                freshness_indicator(*is_refreshing.read(), *last_fetched_at.read());
+
             rsx! {
                 div { class: "dashboard",
+                    // Cache freshness indicator
+                    div { class: "freshness-indicator",
+                        span { class: "{dot_class}" }
+                        span { class: "freshness-label", "{freshness_label}" }
+                    }
+
                     // Quick actions strip
                     div { class: "quick-actions",
                         button {

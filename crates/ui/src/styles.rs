@@ -1038,6 +1038,38 @@ body {
     color: var(--text-tertiary);
 }
 
+/* Cache freshness indicator */
+.freshness-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+.freshness-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.freshness-dot.success {
+    background-color: var(--status-success);
+}
+
+.freshness-dot.warning {
+    background-color: var(--status-warning);
+}
+
+.freshness-dot.error {
+    background-color: var(--status-error);
+}
+
+.freshness-label {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
 /* Quick actions strip */
 .quick-actions {
     display: flex;
