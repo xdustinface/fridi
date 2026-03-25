@@ -14,6 +14,56 @@ fn terminal_id_for(session_id: &str, step_name: &str) -> String {
     format!("terminal-{hex}")
 }
 
+/// Returns the JS snippet that creates a new xterm.js Terminal, opens it in the
+/// given DOM element, loads the FitAddon, and registers a ResizeObserver.
+fn xterm_init_js(tid: &str) -> String {
+    format!(
+        r#"
+        (function() {{
+            let el = document.getElementById('{tid}');
+            if (!el) return;
+            let old = window.fridiTerminals['{tid}'];
+            if (old) {{ old.dispose(); delete window.fridiTerminals['{tid}']; }}
+            let term = new Terminal({{
+                theme: {{
+                    background: '#0c0e12',
+                    foreground: '#e2e8f0',
+                    cursor: '#6b9e6b',
+                    selectionBackground: 'rgba(107, 158, 107, 0.3)',
+                }},
+                fontSize: 13,
+                fontFamily: 'JetBrains Mono, SF Mono, Fira Code, monospace',
+                cursorStyle: 'underline',
+                scrollback: 10000,
+                convertEol: true,
+                allowTransparency: true,
+            }});
+            term.open(el);
+            let fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            function syncSize() {{
+                let p = el.parentElement;
+                if (p && p.clientWidth > 0 && p.clientHeight > 0) {{
+                    el.style.width = p.clientWidth + 'px';
+                    el.style.height = (p.clientHeight - el.offsetTop) + 'px';
+                    fitAddon.fit();
+                    return true;
+                }}
+                return false;
+            }}
+            function doFit() {{
+                if (!syncSize()) {{
+                    requestAnimationFrame(doFit);
+                }}
+            }}
+            requestAnimationFrame(doFit);
+            new ResizeObserver(() => syncSize()).observe(el.parentElement);
+            window.fridiTerminals['{tid}'] = term;
+        }})();
+        "#,
+    )
+}
+
 #[component]
 pub(crate) fn TerminalView(
     session_id: String,
@@ -46,161 +96,128 @@ pub(crate) fn TerminalView(
     // Whether the xterm instance for the current terminal_id has been created.
     let mut terminal_ready = use_signal(|| false);
 
-    // When the step changes, reset tracking state and destroy old terminal.
-    if *active_id.read() != *terminal_id.read() {
-        let old_id = active_id.read().clone();
-        if !old_id.is_empty() {
-            let js = format!(
-                r#"
-                (function() {{
-                    let t = window.fridiTerminals['{old_id}'];
-                    if (t) {{ t.dispose(); delete window.fridiTerminals['{old_id}']; }}
-                }})();
-                "#,
-            );
-            spawn(async move {
-                let _ = document::eval(&js).await;
-            });
-        }
-        active_id.set(terminal_id.read().clone());
-        written_len.set(0);
-        terminal_ready.set(false);
-    }
-
-    // Initialize xterm.js when the container div is mounted in the DOM.
-    let tid_for_mount = terminal_id.read().clone();
-    let on_mounted = move |_evt: MountedEvent| {
-        let tid = tid_for_mount.clone();
-        spawn(async move {
-            let js = format!(
-                r#"
-                (function() {{
-                    let el = document.getElementById('{tid}');
-                    if (!el || window.fridiTerminals['{tid}']) return;
-                    let term = new Terminal({{
-                        theme: {{
-                            background: '#0c0e12',
-                            foreground: '#e2e8f0',
-                            cursor: '#6b9e6b',
-                            selectionBackground: 'rgba(107, 158, 107, 0.3)',
-                        }},
-                        fontSize: 13,
-                        fontFamily: 'JetBrains Mono, SF Mono, Fira Code, monospace',
-                        cursorStyle: 'underline',
-                        scrollback: 10000,
-                        convertEol: true,
-                        allowTransparency: true,
-                    }});
-                    term.open(el);
-                    let fitAddon = new FitAddon.FitAddon();
-                    term.loadAddon(fitAddon);
-                    function syncSize() {{
-                        let p = el.parentElement;
-                        if (p && p.clientWidth > 0 && p.clientHeight > 0) {{
-                            el.style.width = p.clientWidth + 'px';
-                            el.style.height = (p.clientHeight - el.offsetTop) + 'px';
-                            fitAddon.fit();
-                            return true;
-                        }}
-                        return false;
-                    }}
-                    function doFit() {{
-                        if (!syncSize()) {{
-                            requestAnimationFrame(doFit);
-                        }}
-                    }}
-                    requestAnimationFrame(doFit);
-                    new ResizeObserver(() => syncSize()).observe(el.parentElement);
-                    window.fridiTerminals['{tid}'] = term;
-                }})();
-                "#,
-            );
-            let _ = document::eval(&js).await;
-            // Reset written_len so all buffered output is replayed into the
-            // fresh xterm instance (signals persist across re-mounts).
-            written_len.set(0);
-            terminal_ready.set(true);
-        });
-    };
-
-    // Event-driven PTY resize via `dioxus.send()`/`eval.recv()`.
+    // Spawns a resize event channel for the given terminal. The JS calls
+    // `dioxus.send()` on every xterm resize (and once immediately with the
+    // initial size). Each new xterm instance needs its own channel.
     let resize_key = format!("{}:{}", session_id, step_name);
-    let resize_tid = terminal_id.read().clone();
-    use_coroutine(move |_: UnboundedReceiver<()>| {
-        let step = resize_key.clone();
-        let tid = resize_tid.clone();
-        async move {
-            // Wait for the terminal to be created in JS.
-            loop {
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                let check = format!("return window.fridiTerminals['{}'] ? true : false;", tid);
-                if let Ok(val) = document::eval(&check).await {
-                    if val == true {
-                        break;
-                    }
-                }
-            }
+    let start_resize_channel = {
+        let resize_key = resize_key.clone();
+        move |tid: String| {
+            let step = resize_key.clone();
+            spawn(async move {
+                let js = format!(
+                    r#"
+                    var t = window.fridiTerminals['{tid}'];
+                    if (t) {{
+                        dioxus.send({{ cols: t.cols, rows: t.rows }});
+                        var resizeTimer = null;
+                        t.onResize(function(size) {{
+                            if (resizeTimer) clearTimeout(resizeTimer);
+                            resizeTimer = setTimeout(function() {{
+                                dioxus.send({{ cols: size.cols, rows: size.rows }});
+                            }}, 150);
+                        }});
+                    }}
+                    "#
+                );
 
-            // Set up the resize event channel. The JS calls `dioxus.send()` on
-            // every xterm resize (and once immediately with the initial size).
-            let js = format!(
-                r#"
-                var t = window.fridiTerminals['{tid}'];
-                if (t) {{
-                    dioxus.send({{ cols: t.cols, rows: t.rows }});
-                    var resizeTimer = null;
-                    t.onResize(function(size) {{
-                        if (resizeTimer) clearTimeout(resizeTimer);
-                        resizeTimer = setTimeout(function() {{
-                            dioxus.send({{ cols: size.cols, rows: size.rows }});
-                        }}, 150);
-                    }});
-                }}
-                "#
-            );
+                let mut eval = document::eval(&js);
 
-            let mut eval = document::eval(&js);
+                tracing::info!("PTY resize channel established for step {}", step);
 
-            tracing::info!("PTY resize channel established for step {}", step);
-
-            loop {
-                match eval.recv::<serde_json::Value>().await {
-                    Ok(val) => {
-                        if let (Some(cols), Some(rows)) = (
-                            val.get("cols").and_then(|v| v.as_u64()),
-                            val.get("rows").and_then(|v| v.as_u64()),
-                        ) {
-                            let cols = cols as u16;
-                            let rows = rows as u16;
-                            tracing::info!("PTY resize event: {}x{} for step {}", cols, rows, step);
-                            if let Some(resizer) = pty::get_resizer(&step) {
-                                resizer.resize(cols, rows);
-                            } else {
-                                // Resizer may not be registered yet; retry with backoff.
-                                let mut retries = 0;
-                                while pty::get_resizer(&step).is_none() && retries < 30 {
-                                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                                    retries += 1;
-                                }
+                loop {
+                    match eval.recv::<serde_json::Value>().await {
+                        Ok(val) => {
+                            if let (Some(cols), Some(rows)) = (
+                                val.get("cols").and_then(|v| v.as_u64()),
+                                val.get("rows").and_then(|v| v.as_u64()),
+                            ) {
+                                let cols = cols as u16;
+                                let rows = rows as u16;
+                                tracing::info!(
+                                    "PTY resize event: {}x{} for step {}",
+                                    cols,
+                                    rows,
+                                    step
+                                );
                                 if let Some(resizer) = pty::get_resizer(&step) {
                                     resizer.resize(cols, rows);
                                 } else {
-                                    tracing::warn!(
-                                        "PTY resizer not found after retries for step {}",
-                                        step
-                                    );
+                                    let mut retries = 0;
+                                    while pty::get_resizer(&step).is_none() && retries < 30 {
+                                        tokio::time::sleep(std::time::Duration::from_millis(100))
+                                            .await;
+                                        retries += 1;
+                                    }
+                                    if let Some(resizer) = pty::get_resizer(&step) {
+                                        resizer.resize(cols, rows);
+                                    } else {
+                                        tracing::warn!(
+                                            "PTY resizer not found after retries for step {}",
+                                            step
+                                        );
+                                    }
                                 }
                             }
                         }
-                    }
-                    Err(e) => {
-                        tracing::warn!("PTY resize channel closed for step {}: {}", step, e);
-                        break;
+                        Err(e) => {
+                            tracing::warn!("PTY resize channel closed for step {}: {}", step, e);
+                            break;
+                        }
                     }
                 }
-            }
+            });
         }
-    });
+    };
+
+    // When the step changes, reset tracking state, destroy old terminal, and
+    // create a new xterm instance. Dioxus reuses the DOM div so `onmounted`
+    // won't fire again — we must re-initialize xterm ourselves.
+    if *active_id.read() != *terminal_id.read() {
+        let old_id = active_id.read().clone();
+        let new_id = terminal_id.read().clone();
+        active_id.set(new_id.clone());
+        written_len.set(0);
+        terminal_ready.set(false);
+
+        if !old_id.is_empty() {
+            let init_js = xterm_init_js(&new_id);
+            let tid = new_id.clone();
+            let start_resize = start_resize_channel.clone();
+            spawn(async move {
+                // Dispose the old terminal first.
+                let dispose_js = format!(
+                    r#"
+                    (function() {{
+                        let t = window.fridiTerminals['{old_id}'];
+                        if (t) {{ t.dispose(); delete window.fridiTerminals['{old_id}']; }}
+                    }})();
+                    "#,
+                );
+                let _ = document::eval(&dispose_js).await;
+                // Initialize xterm on the reused DOM element.
+                let _ = document::eval(&init_js).await;
+                terminal_ready.set(true);
+                start_resize(tid);
+            });
+        }
+    }
+
+    // Initialize xterm.js when the container div is first mounted in the DOM.
+    let tid_for_mount = terminal_id.read().clone();
+    let start_resize_on_mount = start_resize_channel.clone();
+    let on_mounted = move |_evt: MountedEvent| {
+        written_len.set(0);
+        terminal_ready.set(false);
+        let js = xterm_init_js(&tid_for_mount);
+        let tid = tid_for_mount.clone();
+        let start_resize = start_resize_on_mount.clone();
+        spawn(async move {
+            let _ = document::eval(&js).await;
+            terminal_ready.set(true);
+            start_resize(tid);
+        });
+    };
 
     // Write new output data to the xterm instance (only the delta since last write).
     let current_len = output.len();
