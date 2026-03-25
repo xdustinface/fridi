@@ -37,6 +37,8 @@ fn xterm_init_js(tid: &str) -> String {
                 scrollback: 10000,
                 convertEol: true,
                 allowTransparency: true,
+                overviewRulerLanes: 0,
+                scrollbarStyle: 'overlay',
             }});
             term.open(el);
             let fitAddon = new FitAddon.FitAddon();

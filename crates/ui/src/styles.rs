@@ -706,10 +706,23 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
+    padding: 0;
 }
 
 .terminal-xterm-container .xterm-viewport {
     overflow-y: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.terminal-xterm-container .xterm-screen {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.terminal-xterm-container .xterm-viewport::-webkit-scrollbar {
+    width: 0;
+    display: none;
 }
 
 /* Toast notifications */
