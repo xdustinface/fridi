@@ -1042,13 +1042,14 @@ body {
 .sync-status {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
     cursor: pointer;
     align-self: flex-end;
-    padding: 6px 12px;
+    padding: 5px 10px;
+    min-width: 140px;
     background-color: var(--surface-2);
     border: 1px solid var(--border-subtle);
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     transition: background-color var(--transition-normal), border-color var(--transition-normal);
 }
 
@@ -1066,7 +1067,7 @@ body {
     height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
-    margin-top: 4px;
+    margin-top: 3px;
 }
 
 .sync-dot.success { background-color: var(--accent); }
@@ -1080,7 +1081,7 @@ body {
 }
 
 .sync-label {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--text-primary);
 }
