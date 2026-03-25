@@ -1,4 +1,5 @@
 pub(crate) mod backlog_tab;
+pub(crate) mod confirm_dialog;
 pub(crate) mod home_dashboard;
 pub(crate) mod quick_capture;
 pub(crate) mod session_creator;

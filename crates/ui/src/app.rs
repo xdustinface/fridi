@@ -9,6 +9,7 @@ use serde_yaml::to_string as to_yaml;
 use tracing::error;
 
 use crate::components::backlog_tab::BacklogTab;
+use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::home_dashboard::HomeDashboard;
 use crate::components::quick_capture::QuickCapture;
 use crate::components::session_creator::{SessionCreator, SessionSource};
@@ -111,6 +112,7 @@ pub(crate) fn App() -> Element {
 
     let mut showing_creator = use_signal(|| false);
     let mut showing_quick_capture = use_signal(|| false);
+    let mut pending_close_tab: Signal<Option<usize>> = use_signal(|| None);
 
     // Per-session engine event receivers and live state
     let mut engine_receivers: crate::engine_bridge::EngineReceivers = use_signal(HashMap::new);
@@ -161,7 +163,7 @@ pub(crate) fn App() -> Element {
     };
 
     let repo_for_close = default_repo.clone();
-    let on_close_tab = move |idx: usize| {
+    let mut do_close_tab = move |idx: usize| {
         let mut t = tabs.write();
         if idx < t.len() {
             let closed_sid = t[idx].session_id.clone();
@@ -195,6 +197,10 @@ pub(crate) fn App() -> Element {
                 }
             }
         }
+    };
+
+    let on_close_tab = move |idx: usize| {
+        pending_close_tab.set(Some(idx));
     };
 
     let on_new_tab = move |()| {
@@ -377,31 +383,15 @@ pub(crate) fn App() -> Element {
                         if let ActivePane::Session(idx) = current {
                             let t = tabs.read();
                             if idx < t.len() {
-                                let closed_sid = t[idx].session_id.clone();
-                                let closed_id_str = closed_sid.as_str().to_string();
                                 drop(t);
-
-                                tabs.write().remove(idx);
-                                engine_receivers.write().remove(&closed_sid);
-                                live_states.write().remove(&closed_sid);
-
-                                let len = tabs.read().len();
-                                let repo_key = repo_for_keys.clone().unwrap_or_default();
-                                let mut ws = window_state.write();
-                                ws.update_tab(&repo_key, &closed_id_str, false);
-                                save_window_state(&ws);
-                                drop(ws);
-
-                                if len == 0 {
-                                    active_pane.set(ActivePane::Home);
-                                } else if idx >= len {
-                                    active_pane.set(ActivePane::Session(len - 1));
-                                }
+                                pending_close_tab.set(Some(idx));
                             }
                         }
                     }
                     "escape" => {
-                        if *showing_quick_capture.read() {
+                        if pending_close_tab.read().is_some() {
+                            pending_close_tab.set(None);
+                        } else if *showing_quick_capture.read() {
                             showing_quick_capture.set(false);
                         } else if *showing_creator.read() {
                             showing_creator.set(false);
@@ -495,6 +485,23 @@ pub(crate) fn App() -> Element {
                 QuickCapture {
                     context: quick_capture_context.clone(),
                     on_dismiss: on_dismiss_quick_capture,
+                }
+            }
+            if pending_close_tab.read().is_some() {
+                ConfirmDialog {
+                    title: "Close session?".to_string(),
+                    message: "The terminal output will be lost.".to_string(),
+                    confirm_label: "Close".to_string(),
+                    on_confirm: move |()| {
+                        let idx = *pending_close_tab.read();
+                        pending_close_tab.set(None);
+                        if let Some(idx) = idx {
+                            do_close_tab(idx);
+                        }
+                    },
+                    on_cancel: move |()| {
+                        pending_close_tab.set(None);
+                    },
                 }
             }
             ToastContainer {}
