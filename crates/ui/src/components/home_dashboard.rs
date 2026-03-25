@@ -518,7 +518,7 @@ pub(crate) fn HomeDashboard(
                                                                 });
                                                             }
                                                         },
-                                                        if is_removing { "Removing..." } else { "Ready" }
+                                                        if is_removing { "Humanizing..." } else { "Humanize" }
                                                     }
                                                 }
                                                 span { class: "dashboard-time", "{relative_time(&pr_clone.updated_at)}" }
