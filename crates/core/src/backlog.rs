@@ -1,7 +1,24 @@
 use std::path::PathBuf;
+use std::process::Command;
 use std::{fmt, fs};
 
 use chrono::{DateTime, Utc};
+
+/// Resolve the absolute path to the backlog file (`.fridi/backlog.md`) anchored
+/// at the git repository root. Falls back to the current working directory if
+/// not inside a git repository.
+pub fn backlog_path() -> PathBuf {
+    let root = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| PathBuf::from(s.trim()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    root.join(".fridi/backlog.md")
+}
 
 /// Priority level for a backlog item.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,7 +161,9 @@ impl Backlog {
     }
 
     /// Return a slice of all items.
-    pub fn items(&self) -> &[BacklogItem] { &self.items }
+    pub fn items(&self) -> &[BacklogItem] {
+        &self.items
+    }
 }
 
 /// Extract `#tag` tokens from text. Operates on raw bytes for performance;
@@ -179,7 +198,9 @@ fn extract_tags(text: &str) -> Vec<String> {
     tags
 }
 
-fn is_tag_char(b: u8) -> bool { b.is_ascii_alphanumeric() || b == b'_' || b == b'-' }
+fn is_tag_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
+}
 
 /// Sanitize a metadata field value for safe embedding in HTML comments.
 /// Replaces spaces with hyphens (to avoid breaking `rfind(' ')` parsing)
@@ -521,6 +542,19 @@ Another paragraph.
         let items = parse_items(content);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].text, "real item");
+    }
+
+    #[test]
+    fn backlog_path_is_absolute_and_ends_correctly() {
+        let path = backlog_path();
+        assert!(
+            path.is_absolute(),
+            "backlog path should be absolute: {path:?}"
+        );
+        assert!(
+            path.ends_with(".fridi/backlog.md"),
+            "backlog path should end with .fridi/backlog.md: {path:?}"
+        );
     }
 
     #[test]

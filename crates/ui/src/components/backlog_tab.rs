@@ -1,11 +1,7 @@
-use std::path::PathBuf;
-
 use chrono::Utc;
 use dioxus::prelude::*;
-use fridi_core::backlog::{Backlog, Priority};
+use fridi_core::backlog::{Backlog, Priority, backlog_path};
 use tracing::error;
-
-const BACKLOG_FILE: &str = ".fridi/backlog.md";
 
 /// Compute a human-readable relative time from a chrono DateTime.
 fn relative_time_from_dt(dt: chrono::DateTime<Utc>) -> String {
@@ -106,14 +102,11 @@ fn build_display_items(backlog: &Backlog) -> Vec<DisplayItem> {
 
 #[component]
 pub(crate) fn BacklogTab() -> Element {
-    let backlog_path = PathBuf::from(BACKLOG_FILE);
+    let path = backlog_path();
     let mut backlog = use_signal(|| {
-        Backlog::load(&backlog_path).unwrap_or_else(|e| {
-            error!(
-                "failed to load backlog from {}: {e}",
-                backlog_path.display()
-            );
-            Backlog::empty(&backlog_path)
+        Backlog::load(&path).unwrap_or_else(|e| {
+            error!("failed to load backlog from {}: {e}", path.display());
+            Backlog::empty(&path)
         })
     });
     let mut input_text = use_signal(String::new);

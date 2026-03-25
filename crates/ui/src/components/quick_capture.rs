@@ -1,10 +1,6 @@
-use std::path::PathBuf;
-
 use dioxus::prelude::*;
-use fridi_core::backlog::Backlog;
+use fridi_core::backlog::{Backlog, backlog_path};
 use tracing::error;
-
-const BACKLOG_PATH: &str = ".fridi/backlog.md";
 
 #[component]
 pub(crate) fn QuickCapture(context: Option<String>, on_dismiss: EventHandler<()>) -> Element {
@@ -15,7 +11,7 @@ pub(crate) fn QuickCapture(context: Option<String>, on_dismiss: EventHandler<()>
         move |_| {
             let text = input_text.read().trim().to_string();
             if !text.is_empty() {
-                let path = PathBuf::from(BACKLOG_PATH);
+                let path = backlog_path();
                 match Backlog::load(&path) {
                     Ok(mut backlog) => {
                         backlog.add(&text, context.as_deref());
