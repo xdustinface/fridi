@@ -269,14 +269,14 @@ pub fn auto_pick_issue(repo: &str) -> Result<Option<GitHubIssue>, GitHubError> {
 }
 
 pub fn update_issue_body(repo: &str, issue_number: u64, new_body: &str) -> Result<(), GitHubError> {
-    let payload = serde_json::json!({ "body": new_body }).to_string();
     let mut child = Command::new("gh")
         .args([
-            "api",
-            "-X",
-            "PATCH",
-            &format!("repos/{repo}/issues/{issue_number}"),
-            "--input",
+            "issue",
+            "edit",
+            &issue_number.to_string(),
+            "--repo",
+            repo,
+            "--body-file",
             "-",
         ])
         .stdin(std::process::Stdio::piped())
@@ -285,7 +285,7 @@ pub fn update_issue_body(repo: &str, issue_number: u64, new_body: &str) -> Resul
         .spawn()?;
 
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(payload.as_bytes())?;
+        stdin.write_all(new_body.as_bytes())?;
     }
 
     let output = child.wait_with_output()?;
