@@ -89,15 +89,23 @@ pub(crate) fn TerminalView(
                     term.open(el);
                     let fitAddon = new FitAddon.FitAddon();
                     term.loadAddon(fitAddon);
-                    function doFit() {{
-                        if (el.clientWidth > 0 && el.clientHeight > 0) {{
+                    function syncSize() {{
+                        let p = el.parentElement;
+                        if (p && p.clientWidth > 0 && p.clientHeight > 0) {{
+                            el.style.width = p.clientWidth + 'px';
+                            el.style.height = (p.clientHeight - el.offsetTop) + 'px';
                             fitAddon.fit();
-                        }} else {{
+                            return true;
+                        }}
+                        return false;
+                    }}
+                    function doFit() {{
+                        if (!syncSize()) {{
                             requestAnimationFrame(doFit);
                         }}
                     }}
                     requestAnimationFrame(doFit);
-                    new ResizeObserver(() => fitAddon.fit()).observe(el);
+                    new ResizeObserver(() => syncSize()).observe(el.parentElement);
                     window.fridiTerminals['{tid}'] = term;
                 }})();
                 "#,

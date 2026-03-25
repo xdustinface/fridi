@@ -606,7 +606,8 @@ body {
 }
 
 .split-pane-bottom {
-    overflow-y: auto;
+    overflow: hidden;
+    width: 100%;
 }
 
 .split-pane-divider {
