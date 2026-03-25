@@ -15,6 +15,24 @@ static CACHED_OVERVIEW: OnceLock<Mutex<Option<ProjectOverview>>> = OnceLock::new
 const SESSIONS_DIR: &str = ".fridi/sessions";
 const POLL_INTERVAL_SECS: u64 = 60;
 
+/// Pre-populate the overview cache in the background so the dashboard is
+/// instant on first visit.
+pub(crate) fn warm_overview_cache(repo: Option<String>) {
+    let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    dioxus::prelude::spawn(async move {
+        let result = tokio::task::spawn_blocking(move || {
+            let repo_str = repo.as_deref().unwrap_or("");
+            let store = SessionStore::new(SESSIONS_DIR);
+            fridi_core::project_overview::fetch_project_overview(repo_str, &work_dir, &store)
+        })
+        .await;
+        if let Ok(Ok(data)) = result {
+            let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
+            *cache.lock().unwrap() = Some(data);
+        }
+    });
+}
+
 #[derive(Clone)]
 enum FetchState {
     Loading,
