@@ -46,8 +46,18 @@ pub(crate) fn TerminalView(
     // Whether the xterm instance for the current terminal_id has been created.
     let mut terminal_ready = use_signal(|| false);
 
+    tracing::debug!(
+        "TerminalView render: step={}, output_len={}, written_len={}, terminal_ready={}, active_id={}",
+        step_name,
+        output.len(),
+        *written_len.read(),
+        *terminal_ready.read(),
+        active_id.read()
+    );
+
     // When the step changes, reset tracking state and destroy old terminal.
     if *active_id.read() != *terminal_id.read() {
+        tracing::debug!("TerminalView: active_id changed, resetting");
         let old_id = active_id.read().clone();
         if !old_id.is_empty() {
             let js = format!(
@@ -72,8 +82,10 @@ pub(crate) fn TerminalView(
     // buffered output into the fresh xterm instance after a tab switch.
     let tid_for_mount = terminal_id.read().clone();
     let on_mounted = move |_evt: MountedEvent| {
+        tracing::debug!("TerminalView onmounted: tid={}", tid_for_mount);
         written_len.set(0);
         terminal_ready.set(false);
+        tracing::debug!("TerminalView onmounted: reset written_len=0, terminal_ready=false");
         let tid = tid_for_mount.clone();
         spawn(async move {
             let js = format!(
@@ -125,6 +137,7 @@ pub(crate) fn TerminalView(
             let _ = document::eval(&js).await;
             // Setting terminal_ready triggers a re-render; the delta writer
             // sees written_len == 0 and writes all accumulated output.
+            tracing::debug!("TerminalView: xterm init done, setting terminal_ready=true");
             terminal_ready.set(true);
         });
     };
@@ -214,6 +227,7 @@ pub(crate) fn TerminalView(
 
     // Handle output shrinking (e.g., step re-run replaces buffer with shorter content).
     if current_len < already_written {
+        tracing::debug!("TerminalView: output shrunk, clearing terminal");
         written_len.set(0);
         let tid = terminal_id.read().clone();
         if *terminal_ready.read() {
@@ -230,6 +244,11 @@ pub(crate) fn TerminalView(
             });
         }
     } else if current_len > already_written && *terminal_ready.read() {
+        tracing::debug!(
+            "TerminalView: writing delta {}..{} to xterm",
+            already_written,
+            current_len
+        );
         let new_data = &output[already_written..current_len];
         let b64 = base64::engine::general_purpose::STANDARD.encode(new_data);
         let tid = terminal_id.read().clone();
@@ -249,6 +268,13 @@ pub(crate) fn TerminalView(
             );
             let _ = document::eval(&js).await;
         });
+    } else {
+        tracing::debug!(
+            "TerminalView: no write — current_len={}, written_len={}, ready={}",
+            current_len,
+            already_written,
+            *terminal_ready.read()
+        );
     }
 
     // Dispose the xterm instance when the component unmounts to avoid leaking memory.
