@@ -27,13 +27,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
       - name: Manki
-        uses: xdustinface/manki@main
+        uses: xdustinface/manki@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
