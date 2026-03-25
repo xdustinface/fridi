@@ -67,6 +67,14 @@ pub(crate) fn App() -> Element {
         })
         .filter(|r| !r.is_empty());
 
+    // Pre-populate the dashboard cache so first visit is instant
+    use_hook({
+        let repo = default_repo.clone();
+        move || {
+            crate::components::home_dashboard::warm_overview_cache(repo);
+        }
+    });
+
     // On startup: load window state and recover sessions
     let mut window_state = use_signal(|| state::load_window_state(&state_path.read()));
 

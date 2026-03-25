@@ -1038,6 +1038,63 @@ body {
     color: var(--text-tertiary);
 }
 
+/* Sync status pill button */
+.sync-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    align-self: flex-end;
+    padding: 4px 10px;
+    min-width: 120px;
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-normal), border-color var(--transition-normal);
+}
+
+.sync-status:hover {
+    background-color: var(--surface-3);
+}
+
+.sync-status:active {
+    background-color: var(--surface-2);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.sync-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sync-dot.success { background-color: var(--accent); }
+.sync-dot.warning { background-color: var(--status-warning); animation: pulse-glow 1.5s ease-in-out infinite; }
+.sync-dot.error { background-color: var(--status-error); }
+
+.sync-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.sync-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.sync-detail {
+    font-size: 10px;
+    color: var(--text-tertiary);
+}
+
+@keyframes pulse-glow {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.4); }
+}
+
 /* Quick actions strip */
 .quick-actions {
     display: flex;

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 use dioxus::prelude::*;
 use fridi_core::github::{self, CiStatus};
@@ -8,8 +9,28 @@ use fridi_core::session::SessionStore;
 
 use crate::components::session_creator::SessionSource;
 
+static CACHED_OVERVIEW: OnceLock<Mutex<Option<ProjectOverview>>> = OnceLock::new();
+
 const SESSIONS_DIR: &str = ".fridi/sessions";
 const POLL_INTERVAL_SECS: u64 = 60;
+
+/// Pre-populate the overview cache in the background so the dashboard is
+/// instant on first visit.
+pub(crate) fn warm_overview_cache(repo: Option<String>) {
+    let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    dioxus::prelude::spawn(async move {
+        let result = tokio::task::spawn_blocking(move || {
+            let repo_str = repo.as_deref().unwrap_or("");
+            let store = SessionStore::new(SESSIONS_DIR);
+            fridi_core::project_overview::fetch_project_overview(repo_str, &work_dir, &store)
+        })
+        .await;
+        if let Ok(Ok(data)) = result {
+            let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
+            *cache.lock().unwrap_or_else(|e| e.into_inner()) = Some(data);
+        }
+    });
+}
 
 #[derive(Clone)]
 enum FetchState {
@@ -61,6 +82,42 @@ fn relative_time(iso: &str) -> String {
     }
 }
 
+/// Returns the CSS class for the sync dot based on state.
+fn dot_state_class(is_refreshing: bool, failed: bool, seconds_since_fetch: u32) -> &'static str {
+    if is_refreshing {
+        "warning"
+    } else if failed || seconds_since_fetch > 120 {
+        "error"
+    } else {
+        "success"
+    }
+}
+
+/// Returns the detail text displayed below the status label.
+fn sync_detail(is_refreshing: bool, failed: bool, seconds_since_fetch: u32) -> String {
+    if is_refreshing {
+        "Refreshing...".to_string()
+    } else if failed {
+        "Last sync failed".to_string()
+    } else if seconds_since_fetch > 120 {
+        let mins = seconds_since_fetch / 60;
+        format!("Stale \u{2014} {mins}m ago")
+    } else {
+        format!("Updated {seconds_since_fetch}s ago")
+    }
+}
+
+/// Returns the short label text displayed next to the status dot.
+fn sync_label(is_refreshing: bool, failed: bool, seconds_since_fetch: u32) -> &'static str {
+    if is_refreshing {
+        "Syncing..."
+    } else if failed || seconds_since_fetch > 120 {
+        "Stale"
+    } else {
+        "Synced"
+    }
+}
+
 fn ci_badge_class(status: &CiStatus) -> &'static str {
     match status {
         CiStatus::Passed => "ci-badge passed",
@@ -86,18 +143,30 @@ pub(crate) fn HomeDashboard(
     on_show_pr_picker: EventHandler<()>,
     on_show_creator: EventHandler<()>,
 ) -> Element {
-    let mut state = use_signal(|| FetchState::Loading);
+    let initial_state = {
+        let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
+        match cache.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+            Some(data) => FetchState::Loaded(data),
+            None => FetchState::Loading,
+        }
+    };
+    let mut state = use_signal(|| initial_state);
     let mut pick_state = use_signal(|| PickState::Idle);
     let mut removing_labels: Signal<HashSet<u64>> = use_signal(HashSet::new);
+    let mut is_refreshing = use_signal(|| true);
+    let mut seconds_since_fetch: Signal<u32> = use_signal(|| 0);
+    let mut fetch_failed = use_signal(|| false);
     let repo_clone = repo.clone();
     let work_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
-    // Fetch on mount and poll every 60s
+    // Fetch on mount and poll every 60s; also re-fetches when seconds_since_fetch
+    // is manually reset to 0 (via the refresh button) while a poll sleep is active.
     use_coroutine(move |_: UnboundedReceiver<()>| {
         let repo = repo_clone.clone();
         let work_dir = work_dir.clone();
         async move {
             loop {
+                is_refreshing.set(true);
                 let overview = {
                     let repo = repo.clone();
                     let work_dir = work_dir.clone();
@@ -112,12 +181,36 @@ pub(crate) fn HomeDashboard(
                 };
 
                 match overview {
-                    Ok(Ok(data)) => state.set(FetchState::Loaded(data)),
-                    Ok(Err(e)) => state.set(FetchState::Error(e.to_string())),
-                    Err(e) => state.set(FetchState::Error(e.to_string())),
+                    Ok(Ok(data)) => {
+                        let cache = CACHED_OVERVIEW.get_or_init(|| Mutex::new(None));
+                        *cache.lock().unwrap_or_else(|e| e.into_inner()) = Some(data.clone());
+                        state.set(FetchState::Loaded(data));
+                        seconds_since_fetch.set(0);
+                        fetch_failed.set(false);
+                    }
+                    Ok(Err(e)) => {
+                        state.set(FetchState::Error(e.to_string()));
+                        fetch_failed.set(true);
+                    }
+                    Err(e) => {
+                        state.set(FetchState::Error(e.to_string()));
+                        fetch_failed.set(true);
+                    }
                 }
+                is_refreshing.set(false);
 
                 tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)).await;
+            }
+        }
+    });
+
+    // Tick every second to update the countdown ring
+    use_coroutine(move |_: UnboundedReceiver<()>| async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            if !*is_refreshing.read() {
+                let current = *seconds_since_fetch.read();
+                seconds_since_fetch.set(current.saturating_add(1));
             }
         }
     });
@@ -139,8 +232,73 @@ pub(crate) fn HomeDashboard(
             let has_repo = repo.as_ref().is_some_and(|r| !r.is_empty());
             let is_picking = *pick_state.read() == PickState::Loading;
 
+            let refreshing = *is_refreshing.read();
+            let secs = *seconds_since_fetch.read();
+            let failed = *fetch_failed.read();
+
+            let dot_class = dot_state_class(refreshing, failed, secs);
+            let detail_text = sync_detail(refreshing, failed, secs);
+            let label_text = sync_label(refreshing, failed, secs);
+
             rsx! {
                 div { class: "dashboard",
+                    // Sync status indicator with dot, label, and detail text
+                    div {
+                        class: "sync-status",
+                        onclick: {
+                            let repo = repo.clone();
+                            move |_| {
+                                if *is_refreshing.read() {
+                                    return;
+                                }
+                                seconds_since_fetch.set(0);
+                                is_refreshing.set(true);
+                                let repo = repo.clone();
+                                let work_dir = std::env::current_dir()
+                                    .unwrap_or_else(|_| PathBuf::from("."));
+                                spawn(async move {
+                                    let overview = {
+                                        let repo = repo.clone();
+                                        let work_dir = work_dir.clone();
+                                        tokio::task::spawn_blocking(move || {
+                                            let repo_str = repo.as_deref().unwrap_or("");
+                                            let store = SessionStore::new(SESSIONS_DIR);
+                                            fridi_core::project_overview::fetch_project_overview(
+                                                repo_str, &work_dir, &store,
+                                            )
+                                        })
+                                        .await
+                                    };
+                                    match overview {
+                                        Ok(Ok(data)) => {
+                                            let cache = CACHED_OVERVIEW
+                                                .get_or_init(|| Mutex::new(None));
+                                            *cache.lock().unwrap_or_else(|e| e.into_inner()) =
+                                                Some(data.clone());
+                                            state.set(FetchState::Loaded(data));
+                                            seconds_since_fetch.set(0);
+                                            fetch_failed.set(false);
+                                        }
+                                        Ok(Err(e)) => {
+                                            state.set(FetchState::Error(e.to_string()));
+                                            fetch_failed.set(true);
+                                        }
+                                        Err(e) => {
+                                            state.set(FetchState::Error(e.to_string()));
+                                            fetch_failed.set(true);
+                                        }
+                                    }
+                                    is_refreshing.set(false);
+                                });
+                            }
+                        },
+                        div { class: "sync-dot {dot_class}" }
+                        div { class: "sync-text",
+                            span { class: "sync-label", "{label_text}" }
+                            span { class: "sync-detail", "{detail_text}" }
+                        }
+                    }
+
                     // Quick actions strip
                     div { class: "quick-actions",
                         button {
@@ -365,5 +523,32 @@ mod tests {
     fn relative_time_future_timestamp() {
         let future = (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
         assert_eq!(relative_time(&future), "just now");
+    }
+
+    #[test]
+    fn sync_label_states() {
+        assert_eq!(sync_label(true, false, 0), "Syncing...");
+        assert_eq!(sync_label(false, false, 30), "Synced");
+        assert_eq!(sync_label(false, false, 60), "Synced");
+        assert_eq!(sync_label(false, false, 90), "Synced");
+        assert_eq!(sync_label(false, false, 130), "Stale");
+        assert_eq!(sync_label(false, true, 10), "Stale");
+    }
+
+    #[test]
+    fn dot_state_class_states() {
+        assert_eq!(dot_state_class(true, false, 0), "warning");
+        assert_eq!(dot_state_class(false, false, 30), "success");
+        assert_eq!(dot_state_class(false, false, 90), "success");
+        assert_eq!(dot_state_class(false, false, 130), "error");
+        assert_eq!(dot_state_class(false, true, 10), "error");
+    }
+
+    #[test]
+    fn sync_detail_states() {
+        assert_eq!(sync_detail(true, false, 0), "Refreshing...");
+        assert_eq!(sync_detail(false, false, 45), "Updated 45s ago");
+        assert_eq!(sync_detail(false, false, 130), "Stale \u{2014} 2m ago");
+        assert_eq!(sync_detail(false, true, 10), "Last sync failed");
     }
 }
