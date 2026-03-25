@@ -14,6 +14,56 @@ fn terminal_id_for(session_id: &str, step_name: &str) -> String {
     format!("terminal-{hex}")
 }
 
+/// Returns the JS snippet that creates a new xterm.js Terminal, opens it in the
+/// given DOM element, loads the FitAddon, and registers a ResizeObserver.
+fn xterm_init_js(tid: &str) -> String {
+    format!(
+        r#"
+        (function() {{
+            let el = document.getElementById('{tid}');
+            if (!el) return;
+            let old = window.fridiTerminals['{tid}'];
+            if (old) {{ old.dispose(); delete window.fridiTerminals['{tid}']; }}
+            let term = new Terminal({{
+                theme: {{
+                    background: '#0c0e12',
+                    foreground: '#e2e8f0',
+                    cursor: '#6b9e6b',
+                    selectionBackground: 'rgba(107, 158, 107, 0.3)',
+                }},
+                fontSize: 13,
+                fontFamily: 'JetBrains Mono, SF Mono, Fira Code, monospace',
+                cursorStyle: 'underline',
+                scrollback: 10000,
+                convertEol: true,
+                allowTransparency: true,
+            }});
+            term.open(el);
+            let fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            function syncSize() {{
+                let p = el.parentElement;
+                if (p && p.clientWidth > 0 && p.clientHeight > 0) {{
+                    el.style.width = p.clientWidth + 'px';
+                    el.style.height = (p.clientHeight - el.offsetTop) + 'px';
+                    fitAddon.fit();
+                    return true;
+                }}
+                return false;
+            }}
+            function doFit() {{
+                if (!syncSize()) {{
+                    requestAnimationFrame(doFit);
+                }}
+            }}
+            requestAnimationFrame(doFit);
+            new ResizeObserver(() => syncSize()).observe(el.parentElement);
+            window.fridiTerminals['{tid}'] = term;
+        }})();
+        "#,
+    )
+}
+
 #[component]
 pub(crate) fn TerminalView(
     session_id: String,
@@ -46,98 +96,44 @@ pub(crate) fn TerminalView(
     // Whether the xterm instance for the current terminal_id has been created.
     let mut terminal_ready = use_signal(|| false);
 
-    tracing::debug!(
-        "TerminalView render: step={}, output_len={}, written_len={}, terminal_ready={}, active_id={}",
-        step_name,
-        output.len(),
-        *written_len.read(),
-        *terminal_ready.read(),
-        active_id.read()
-    );
-
-    // When the step changes, reset tracking state and destroy old terminal.
+    // When the step changes, reset tracking state, destroy old terminal, and
+    // create a new xterm instance. Dioxus reuses the DOM div so `onmounted`
+    // won't fire again — we must re-initialize xterm ourselves.
     if *active_id.read() != *terminal_id.read() {
-        tracing::debug!("TerminalView: active_id changed, resetting");
         let old_id = active_id.read().clone();
+        let new_id = terminal_id.read().clone();
+        active_id.set(new_id.clone());
+        written_len.set(0);
+        terminal_ready.set(false);
+
         if !old_id.is_empty() {
-            let js = format!(
-                r#"
-                (function() {{
-                    let t = window.fridiTerminals['{old_id}'];
-                    if (t) {{ t.dispose(); delete window.fridiTerminals['{old_id}']; }}
-                }})();
-                "#,
-            );
+            let init_js = xterm_init_js(&new_id);
             spawn(async move {
-                let _ = document::eval(&js).await;
+                // Dispose the old terminal first.
+                let dispose_js = format!(
+                    r#"
+                    (function() {{
+                        let t = window.fridiTerminals['{old_id}'];
+                        if (t) {{ t.dispose(); delete window.fridiTerminals['{old_id}']; }}
+                    }})();
+                    "#,
+                );
+                let _ = document::eval(&dispose_js).await;
+                // Initialize xterm on the reused DOM element.
+                let _ = document::eval(&init_js).await;
+                terminal_ready.set(true);
             });
         }
-        active_id.set(terminal_id.read().clone());
-        written_len.set(0);
-        terminal_ready.set(false);
     }
 
-    // Initialize xterm.js when the container div is mounted in the DOM.
-    // Reset tracking state so the signal-driven delta writer replays all
-    // buffered output into the fresh xterm instance after a tab switch.
+    // Initialize xterm.js when the container div is first mounted in the DOM.
     let tid_for_mount = terminal_id.read().clone();
     let on_mounted = move |_evt: MountedEvent| {
-        tracing::debug!("TerminalView onmounted: tid={}", tid_for_mount);
         written_len.set(0);
         terminal_ready.set(false);
-        tracing::debug!("TerminalView onmounted: reset written_len=0, terminal_ready=false");
-        let tid = tid_for_mount.clone();
+        let js = xterm_init_js(&tid_for_mount);
         spawn(async move {
-            let js = format!(
-                r#"
-                (function() {{
-                    let el = document.getElementById('{tid}');
-                    if (!el) return;
-                    // Dispose any stale instance left over from a previous mount cycle.
-                    let old = window.fridiTerminals['{tid}'];
-                    if (old) {{ old.dispose(); delete window.fridiTerminals['{tid}']; }}
-                    let term = new Terminal({{
-                        theme: {{
-                            background: '#0c0e12',
-                            foreground: '#e2e8f0',
-                            cursor: '#6b9e6b',
-                            selectionBackground: 'rgba(107, 158, 107, 0.3)',
-                        }},
-                        fontSize: 13,
-                        fontFamily: 'JetBrains Mono, SF Mono, Fira Code, monospace',
-                        cursorStyle: 'underline',
-                        scrollback: 10000,
-                        convertEol: true,
-                        allowTransparency: true,
-                    }});
-                    term.open(el);
-                    let fitAddon = new FitAddon.FitAddon();
-                    term.loadAddon(fitAddon);
-                    function syncSize() {{
-                        let p = el.parentElement;
-                        if (p && p.clientWidth > 0 && p.clientHeight > 0) {{
-                            el.style.width = p.clientWidth + 'px';
-                            el.style.height = (p.clientHeight - el.offsetTop) + 'px';
-                            fitAddon.fit();
-                            return true;
-                        }}
-                        return false;
-                    }}
-                    function doFit() {{
-                        if (!syncSize()) {{
-                            requestAnimationFrame(doFit);
-                        }}
-                    }}
-                    requestAnimationFrame(doFit);
-                    new ResizeObserver(() => syncSize()).observe(el.parentElement);
-                    window.fridiTerminals['{tid}'] = term;
-                }})();
-                "#,
-            );
             let _ = document::eval(&js).await;
-            // Setting terminal_ready triggers a re-render; the delta writer
-            // sees written_len == 0 and writes all accumulated output.
-            tracing::debug!("TerminalView: xterm init done, setting terminal_ready=true");
             terminal_ready.set(true);
         });
     };
@@ -227,7 +223,6 @@ pub(crate) fn TerminalView(
 
     // Handle output shrinking (e.g., step re-run replaces buffer with shorter content).
     if current_len < already_written {
-        tracing::debug!("TerminalView: output shrunk, clearing terminal");
         written_len.set(0);
         let tid = terminal_id.read().clone();
         if *terminal_ready.read() {
@@ -244,11 +239,6 @@ pub(crate) fn TerminalView(
             });
         }
     } else if current_len > already_written && *terminal_ready.read() {
-        tracing::debug!(
-            "TerminalView: writing delta {}..{} to xterm",
-            already_written,
-            current_len
-        );
         let new_data = &output[already_written..current_len];
         let b64 = base64::engine::general_purpose::STANDARD.encode(new_data);
         let tid = terminal_id.read().clone();
@@ -268,13 +258,6 @@ pub(crate) fn TerminalView(
             );
             let _ = document::eval(&js).await;
         });
-    } else {
-        tracing::debug!(
-            "TerminalView: no write — current_len={}, written_len={}, ready={}",
-            current_len,
-            already_written,
-            *terminal_ready.read()
-        );
     }
 
     // Dispose the xterm instance when the component unmounts to avoid leaking memory.
