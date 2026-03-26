@@ -240,6 +240,7 @@ pub(crate) fn App() -> Element {
                     };
                     ("prompt".to_string(), short)
                 }
+                SessionSource::Workflow { name, .. } => (name.clone(), name.clone()),
             };
 
             let session_id = SessionId::new(&workflow_name);
