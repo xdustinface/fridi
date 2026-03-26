@@ -105,7 +105,14 @@ pub(crate) fn workflow_from_source(source: &SessionSource, repo: &str) -> Workfl
         SessionSource::Workflow { path, name } => {
             let file_path = std::path::Path::new(path);
             match Workflow::from_file(file_path) {
-                Ok(wf) => wf,
+                Ok(mut wf) => {
+                    if let Some(ref mut r) = wf.config.repo {
+                        if r.contains("${FRIDI_REPO}") {
+                            *r = r.replace("${FRIDI_REPO}", repo);
+                        }
+                    }
+                    wf
+                }
                 Err(e) => {
                     error!("failed to load workflow '{}' from {}: {}", name, path, e);
                     // Return a minimal error-reporting workflow so the session still starts
