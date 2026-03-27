@@ -484,7 +484,12 @@ pub(crate) fn App() -> Element {
                 on_new_session: on_new_tab,
             }
             div { class: "{main_content_class}",
-                if is_home {
+                if is_home && tabs.read().is_empty() {
+                    WelcomeScreen {
+                        repos: recent_repos_from_state(&window_state.read()),
+                        on_new_session: on_new_tab,
+                    }
+                } else if is_home {
                     HomeDashboard {
                         key: "{default_repo.clone().unwrap_or_default()}",
                         repo: default_repo.clone(),
