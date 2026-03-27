@@ -9,29 +9,25 @@ triggers:
 
 steps:
   - name: architect
-    agent: claude
-    skill: plan
+    agent: planner
     prompt: "You are the Architect. Analyze the technical feasibility and propose a system design. Focus on components, data flow, and integration points."
     outputs:
       - design
 
   - name: strategist
-    agent: claude
-    skill: plan
+    agent: planner
     prompt: "You are the Strategist. Analyze the business impact, prioritize features by ROI, and identify risks. Focus on what to build first and why."
     outputs:
       - strategy
 
   - name: devil
-    agent: claude
-    skill: plan
+    agent: planner
     prompt: "You are the Devil's Advocate. Challenge every assumption, find edge cases, and identify what could go wrong. Be constructively critical."
     outputs:
       - critique
 
   - name: synthesizer
-    agent: claude
-    skill: plan
+    agent: planner
     prompt: "You are the Synthesizer. Review the Architect's design, Strategist's priorities, and Devil's Advocate critique. Produce a unified plan that addresses all perspectives."
     depends_on:
       - architect
