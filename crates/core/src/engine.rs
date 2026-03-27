@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use thiserror::Error;
 use tokio::sync::broadcast;
+use tokio::task::JoinSet;
 use tracing::{debug, error, info, warn};
 
 use crate::dag::WorkflowDag;
@@ -186,7 +187,9 @@ impl Engine {
                 });
             }
 
-            let mut handles = Vec::new();
+            // Spawn all ready steps concurrently via JoinSet
+            let mut join_set: JoinSet<(String, Step, Result<StepResult, String>)> = JoinSet::new();
+
             for step_name in &ready {
                 let step = step_map[step_name.as_str()];
 
@@ -213,11 +216,27 @@ impl Engine {
                 let ctx = context.clone();
                 let name = step_name.clone();
 
+                // Create the future here (borrows spawner), then move it into the task
                 let fut = spawner.spawn_step(&step_clone, &ctx);
-                handles.push((name, step_clone, fut));
+                join_set.spawn(async move {
+                    let result = fut.await;
+                    (name, step_clone, result)
+                });
             }
 
-            for (step_name, step, fut) in handles {
+            // Collect all concurrent results
+            let mut first_attempt_results = Vec::new();
+            while let Some(join_result) = join_set.join_next().await {
+                match join_result {
+                    Ok(result) => first_attempt_results.push(result),
+                    Err(e) => {
+                        error!("step task panicked: {}", e);
+                    }
+                }
+            }
+
+            // Process results and retry failures sequentially
+            for (step_name, step, result) in first_attempt_results {
                 let max_attempts = step
                     .retry
                     .as_ref()
@@ -233,9 +252,8 @@ impl Engine {
 
                 let mut attempt = 1;
                 let mut last_error = String::new();
-                // First attempt uses the already-spawned future
                 let mut success =
-                    handle_step_result(fut.await, &step_name, &mut context, &mut last_error);
+                    handle_step_result(result, &step_name, &mut context, &mut last_error);
                 if success {
                     self.emit(EngineEvent::StepStatusChanged {
                         step_name: step_name.clone(),
@@ -245,7 +263,7 @@ impl Engine {
                     completed.insert(step_name.clone());
                 }
 
-                // Retry loop for subsequent attempts
+                // Retry loop for subsequent attempts (sequential per step)
                 while !success && attempt < max_attempts {
                     attempt += 1;
                     info!(
@@ -735,5 +753,70 @@ steps:
         assert!(is_truthy(&JsonValue::Number(serde_json::Number::from(1))));
         assert!(!is_truthy(&JsonValue::String(String::new())));
         assert!(is_truthy(&JsonValue::String("hello".into())));
+    }
+
+    #[tokio::test]
+    async fn test_parallel_steps_run_concurrently() {
+        use std::sync::Arc;
+
+        use tokio::sync::Barrier;
+
+        let yaml = r#"
+name: parallel-test
+steps:
+  - name: a
+    agent: claude
+  - name: b
+    agent: claude
+  - name: c
+    agent: claude
+"#;
+        let wf = Workflow::from_yaml(yaml).unwrap();
+        let dag = WorkflowDag::from_workflow(&wf).unwrap();
+        let (engine, _rx) = Engine::new();
+
+        // A barrier that requires all 3 steps to arrive before any can proceed.
+        // If steps ran sequentially, the barrier would never complete.
+        let barrier = Arc::new(Barrier::new(3));
+
+        struct BarrierSpawner {
+            barrier: Arc<Barrier>,
+        }
+
+        impl AgentSpawner for BarrierSpawner {
+            fn spawn_step(
+                &self,
+                _step: &Step,
+                _context: &WorkflowContext,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<StepResult, String>> + Send>,
+            > {
+                let b = self.barrier.clone();
+                Box::pin(async move {
+                    // All 3 steps must reach the barrier concurrently
+                    b.wait().await;
+                    Ok(StepResult {
+                        exit_code: 0,
+                        output: "done".to_string(),
+                        structured_output: None,
+                    })
+                })
+            }
+        }
+
+        let spawner = BarrierSpawner { barrier };
+
+        // With a 2-second timeout: if steps are sequential the barrier deadlocks
+        let result =
+            tokio::time::timeout(Duration::from_secs(2), engine.execute(&wf, &dag, &spawner)).await;
+
+        assert!(
+            result.is_ok(),
+            "parallel steps should complete within timeout (would deadlock if sequential)"
+        );
+        let ctx = result.unwrap().unwrap();
+        assert!(ctx.get_step_output("a").is_some());
+        assert!(ctx.get_step_output("b").is_some());
+        assert!(ctx.get_step_output("c").is_some());
     }
 }
