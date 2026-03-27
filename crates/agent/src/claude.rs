@@ -108,7 +108,7 @@ impl Agent for ClaudeAgent {
         }
 
         if let Some(skill) = &config.skill {
-            cmd.arg("--skill");
+            cmd.arg("--agent");
             cmd.arg(skill);
         }
 
