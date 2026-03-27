@@ -85,15 +85,7 @@ pub(crate) fn App() -> Element {
         let ws = state::load_window_state(&state_path.read());
         let (restored, _) = state::restore_tabs(&ws, &sessions, &repo_key);
         if restored.is_empty() {
-            // Fall back to showing all sessions as tabs
-            sessions
-                .iter()
-                .map(|s| TabInfo {
-                    session_id: s.id.clone(),
-                    workflow_name: s.workflow_name.clone(),
-                    status: s.status.clone(),
-                })
-                .collect::<Vec<_>>()
+            Vec::new()
         } else {
             restored
         }
@@ -203,6 +195,11 @@ pub(crate) fn App() -> Element {
             ws.update_tab(&repo_key, &closed_session_id, false);
             save_window_state(&ws);
             drop(ws);
+
+            // Delete the session from disk
+            if let Err(e) = store.read().delete(&closed_sid) {
+                error!("failed to delete session {closed_session_id}: {e}");
+            }
 
             drop(t);
             if len == 0 {
