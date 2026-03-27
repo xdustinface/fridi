@@ -242,6 +242,7 @@ fn get_effective_body(issue: &IssueSummary, pending: &HashMap<u64, String>) -> S
 #[component]
 pub(crate) fn HomeDashboard(
     repo: Option<String>,
+    #[props(default = false)] is_fresh_install: bool,
     on_pick_issue: EventHandler<SessionSource>,
     on_show_pr_picker: EventHandler<()>,
     on_show_creator: EventHandler<()>,
@@ -328,11 +329,17 @@ pub(crate) fn HomeDashboard(
     match current {
         FetchState::Loading => rsx! {
             div { class: "dashboard",
+                if is_fresh_install {
+                    WelcomeBanner { on_new_session: on_show_creator }
+                }
                 div { class: "dashboard-loading", "Loading project overview..." }
             }
         },
         FetchState::Error(msg) => rsx! {
             div { class: "dashboard",
+                if is_fresh_install {
+                    WelcomeBanner { on_new_session: on_show_creator }
+                }
                 div { class: "dashboard-error", "Failed to load overview: {msg}" }
             }
         },
@@ -350,6 +357,9 @@ pub(crate) fn HomeDashboard(
 
             rsx! {
                 div { class: "dashboard",
+                    if is_fresh_install {
+                        WelcomeBanner { on_new_session: on_show_creator }
+                    }
                     // Sync status indicator with dot, label, and detail text
                     div {
                         class: "sync-status",
@@ -1130,5 +1140,25 @@ mod tests {
         assert_eq!(get_effective_body(&issue, &pending), "original");
         pending.insert(42, "modified".into());
         assert_eq!(get_effective_body(&issue, &pending), "modified");
+    }
+}
+
+#[component]
+fn WelcomeBanner(on_new_session: EventHandler<()>) -> Element {
+    rsx! {
+        div { class: "welcome-banner",
+            div { class: "welcome-banner-text",
+                span { class: "welcome-logo", "fridi" }
+                span { class: "welcome-tagline", "AI workflow orchestrator" }
+            }
+            div { class: "welcome-banner-actions",
+                button {
+                    class: "welcome-btn primary",
+                    onclick: move |_| on_new_session.call(()),
+                    "New Session"
+                }
+                span { class: "welcome-hint", "Cmd+T" }
+            }
+        }
     }
 }

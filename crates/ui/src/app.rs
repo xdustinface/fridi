@@ -16,7 +16,6 @@ use crate::components::session_creator::{SessionCreator, SessionSource};
 use crate::components::sidebar::Sidebar;
 use crate::components::tab_bar::TabBar;
 use crate::components::toast::{ToastContainer, ToastLevel, Toasts, push_toast};
-use crate::components::welcome_screen::{WelcomeScreen, recent_repos_from_state};
 use crate::components::workflow_view::WorkflowView;
 use crate::engine_bridge::use_engine_events;
 use crate::state::{self, TabInfo};
@@ -494,15 +493,11 @@ pub(crate) fn App() -> Element {
                 on_new_session: on_new_tab,
             }
             div { class: "{main_content_class}",
-                if is_home && *is_fresh_install.read() {
-                    WelcomeScreen {
-                        repos: recent_repos_from_state(&window_state.read()),
-                        on_new_session: on_new_tab,
-                    }
-                } else if is_home {
+                if is_home {
                     HomeDashboard {
                         key: "{default_repo.clone().unwrap_or_default()}",
                         repo: default_repo.clone(),
+                        is_fresh_install: *is_fresh_install.read(),
                         on_pick_issue,
                         // TODO: wire to a dedicated PR picker once available
                         on_show_pr_picker: on_new_tab,
@@ -527,6 +522,7 @@ pub(crate) fn App() -> Element {
                     HomeDashboard {
                         key: "{default_repo.clone().unwrap_or_default()}",
                         repo: default_repo.clone(),
+                        is_fresh_install: *is_fresh_install.read(),
                         on_pick_issue,
                         on_show_pr_picker: on_new_tab,
                         on_show_creator: on_new_tab,
