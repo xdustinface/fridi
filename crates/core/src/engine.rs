@@ -189,6 +189,7 @@ impl Engine {
 
             // Spawn all ready steps concurrently via JoinSet
             let mut join_set: JoinSet<(String, Step, Result<StepResult, String>)> = JoinSet::new();
+            let mut spawned_steps: HashSet<String> = HashSet::new();
 
             for step_name in &ready {
                 let step = step_map[step_name.as_str()];
@@ -215,6 +216,7 @@ impl Engine {
                 let step_clone = step.clone();
                 let ctx = context.clone();
                 let name = step_name.clone();
+                spawned_steps.insert(step_name.clone());
 
                 // Create the future here (borrows spawner), then move it into the task
                 let fut = spawner.spawn_step(&step_clone, &ctx);
@@ -226,11 +228,51 @@ impl Engine {
 
             // Collect all concurrent results
             let mut first_attempt_results = Vec::new();
+            let mut returned_steps: HashSet<String> = HashSet::new();
             while let Some(join_result) = join_set.join_next().await {
                 match join_result {
-                    Ok(result) => first_attempt_results.push(result),
+                    Ok((ref name, _, _)) => {
+                        returned_steps.insert(name.clone());
+                        first_attempt_results.push(join_result.unwrap());
+                    }
                     Err(e) => {
                         error!("step task panicked: {}", e);
+                    }
+                }
+            }
+
+            // Detect panicked tasks by comparing spawned vs returned step names
+            for panicked_name in spawned_steps.difference(&returned_steps) {
+                let reason = "task panicked".to_string();
+                let status = StepStatus::Failed(reason.clone());
+                error!("step '{}' panicked during execution", panicked_name);
+                self.emit(EngineEvent::StepStatusChanged {
+                    step_name: panicked_name.clone(),
+                    status: status.clone(),
+                });
+                statuses.insert(panicked_name.clone(), status);
+
+                let step = step_map[panicked_name.as_str()];
+                match step.on_failure.as_ref().unwrap_or(&OnFailure::Stop) {
+                    OnFailure::Notify => {
+                        self.emit(EngineEvent::NotificationRequired {
+                            step_name: panicked_name.clone(),
+                            message: format!("Step '{}' failed: task panicked", panicked_name),
+                        });
+                        completed.insert(panicked_name.clone());
+                    }
+                    OnFailure::Continue => {
+                        completed.insert(panicked_name.clone());
+                    }
+                    OnFailure::Stop => {
+                        self.emit(EngineEvent::WorkflowFailed {
+                            workflow_name: workflow.name.clone(),
+                            reason: format!("step '{}' failed: task panicked", panicked_name),
+                        });
+                        return Err(EngineError::StepFailed {
+                            step: panicked_name.clone(),
+                            reason,
+                        });
                     }
                 }
             }
