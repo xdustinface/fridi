@@ -20,7 +20,7 @@ jobs:
     if: |
       github.event_name == 'pull_request' ||
       (github.event_name == 'issue_comment' &&
-       (contains(github.event.comment.body, '@manki review') || contains(github.event.comment.body, '@claude review')) &&
+       contains(github.event.comment.body, '@manki review') &&
        github.event.issue.pull_request)
     runs-on: ubuntu-latest
     timeout-minutes: 30
