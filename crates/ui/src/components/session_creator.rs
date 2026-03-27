@@ -1,12 +1,25 @@
+use std::path::PathBuf;
+
 use dioxus::prelude::*;
 use fridi_core::github::{self, GitHubIssue, GitHubPR};
+use fridi_core::schema::Workflow;
 
 #[derive(Clone, PartialEq)]
 enum CreatorMode {
     SelectMode,
     PickIssue,
     PickPR,
+    PickWorkflow,
     NewPrompt,
+}
+
+/// A workflow file entry discovered in the workflows directory.
+#[derive(Clone, PartialEq)]
+struct WorkflowEntry {
+    name: String,
+    description: Option<String>,
+    path: String,
+    step_count: usize,
 }
 
 #[derive(Clone, PartialEq)]
@@ -31,6 +44,10 @@ pub(crate) enum SessionSource {
     Prompt {
         text: String,
     },
+    Workflow {
+        path: String,
+        name: String,
+    },
 }
 
 #[component]
@@ -42,6 +59,7 @@ pub(crate) fn SessionCreator(
     let mut mode = use_signal(|| CreatorMode::SelectMode);
     let mut issues = use_signal(|| None::<LoadState<Vec<GitHubIssue>>>);
     let mut prs = use_signal(|| None::<LoadState<Vec<GitHubPR>>>);
+    let mut workflows = use_signal(|| None::<LoadState<Vec<WorkflowEntry>>>);
     let mut prompt_text = use_signal(String::new);
     let mut search_filter = use_signal(String::new);
 
@@ -128,6 +146,18 @@ pub(crate) fn SessionCreator(
                                 },
                                 div { class: "mode-btn-title", "Pick PR" }
                                 div { class: "mode-btn-desc", "Browse open PRs" }
+                            }
+                            button {
+                                class: "mode-btn",
+                                onclick: move |_| {
+                                    mode.set(CreatorMode::PickWorkflow);
+                                    search_filter.set(String::new());
+                                    workflows.set(Some(LoadState::Loading));
+                                    let entries = scan_workflow_dir(&PathBuf::from("./workflows"));
+                                    workflows.set(Some(LoadState::Loaded(entries)));
+                                },
+                                div { class: "mode-btn-title", "Pick Workflow" }
+                                div { class: "mode-btn-desc", "Run a workflow file" }
                             }
                             button {
                                 class: "mode-btn",
@@ -283,6 +313,76 @@ pub(crate) fn SessionCreator(
                             }
                         }
                     },
+                    CreatorMode::PickWorkflow => rsx! {
+                        div { class: "creator-header",
+                            button {
+                                class: "creator-back",
+                                onclick: move |_| mode.set(CreatorMode::SelectMode),
+                                "< Back"
+                            }
+                            h3 { "Pick Workflow" }
+                        }
+                        input {
+                            class: "creator-search",
+                            placeholder: "Filter workflows...",
+                            value: "{search_filter}",
+                            oninput: move |evt| search_filter.set(evt.value()),
+                        }
+                        div { class: "picker-list",
+                            match &*workflows.read() {
+                                Some(LoadState::Loading) => rsx! {
+                                    div { class: "creator-loading", "Scanning workflows..." }
+                                },
+                                Some(LoadState::Error(e)) => rsx! {
+                                    div { class: "creator-error", "Error: {e}" }
+                                },
+                                Some(LoadState::Loaded(list)) => {
+                                    let filter = search_filter.read().to_lowercase();
+                                    let filtered: Vec<_> = list.iter().filter(|w| {
+                                        filter.is_empty()
+                                            || w.name.to_lowercase().contains(&filter)
+                                            || w.description.as_deref().unwrap_or_default().to_lowercase().contains(&filter)
+                                    }).collect();
+                                    if filtered.is_empty() {
+                                        rsx! {
+                                            div { class: "picker-empty", "No workflow files found" }
+                                        }
+                                    } else {
+                                        rsx! {
+                                            for wf in filtered {
+                                                {
+                                                    let name = wf.name.clone();
+                                                    let path = wf.path.clone();
+                                                    let desc = wf.description.clone();
+                                                    let step_count = wf.step_count;
+                                                    rsx! {
+                                                        div {
+                                                            key: "wf-{name}",
+                                                            class: "picker-item",
+                                                            onclick: move |_| {
+                                                                on_create.call(SessionSource::Workflow {
+                                                                    path: path.clone(),
+                                                                    name: name.clone(),
+                                                                });
+                                                            },
+                                                            div { class: "picker-item-row",
+                                                                span { class: "picker-item-name", "{wf.name}" }
+                                                                span { class: "picker-item-badge", "{step_count} steps" }
+                                                            }
+                                                            if let Some(d) = &desc {
+                                                                span { class: "picker-item-desc", "{d}" }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                None => rsx! {},
+                            }
+                        }
+                    },
                     CreatorMode::NewPrompt => rsx! {
                         div { class: "creator-header",
                             button {
@@ -319,4 +419,31 @@ pub(crate) fn SessionCreator(
             }
         }
     }
+}
+
+/// Scan the workflows directory for `.yaml`/`.yml` files and parse them.
+fn scan_workflow_dir(dir: &PathBuf) -> Vec<WorkflowEntry> {
+    let mut entries = Vec::new();
+    let Ok(dir_entries) = std::fs::read_dir(dir) else {
+        return entries;
+    };
+    for entry in dir_entries.flatten() {
+        let path = entry.path();
+        let is_yaml = path
+            .extension()
+            .is_some_and(|ext| ext == "yaml" || ext == "yml");
+        if !is_yaml {
+            continue;
+        }
+        if let Ok(wf) = Workflow::from_file(&path) {
+            entries.push(WorkflowEntry {
+                name: wf.name.clone(),
+                description: wf.description.clone(),
+                path: path.to_string_lossy().into_owned(),
+                step_count: wf.steps.len(),
+            });
+        }
+    }
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    entries
 }

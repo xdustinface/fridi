@@ -91,7 +91,10 @@ impl WorkflowRunner {
     }
 }
 
-/// Build a single-step workflow from the user's session source.
+/// Build a workflow from the user's session source.
+///
+/// For `Issue`, `PR`, and `Prompt` sources a single-step workflow is generated.
+/// For `Workflow` sources the file is loaded directly.
 pub(crate) fn workflow_from_source(source: &SessionSource, repo: &str) -> Workflow {
     let default_config = || WorkflowConfig {
         repo: Some(repo.into()),
@@ -99,6 +102,38 @@ pub(crate) fn workflow_from_source(source: &SessionSource, repo: &str) -> Workfl
     };
 
     match source {
+        SessionSource::Workflow { path, name } => {
+            let file_path = std::path::Path::new(path);
+            match Workflow::from_file(file_path) {
+                Ok(mut wf) => {
+                    if let Some(ref mut r) = wf.config.repo {
+                        if r.contains("${FRIDI_REPO}") {
+                            *r = r.replace("${FRIDI_REPO}", repo);
+                        }
+                    }
+                    wf
+                }
+                Err(e) => {
+                    error!("failed to load workflow '{}' from {}: {}", name, path, e);
+                    // Return a minimal error-reporting workflow so the session still starts
+                    Workflow {
+                        name: name.clone(),
+                        description: Some(format!("Failed to load: {e}")),
+                        config: default_config(),
+                        triggers: vec![],
+                        notifications: Default::default(),
+                        steps: vec![Step {
+                            name: "error".into(),
+                            agent: Some("claude".into()),
+                            prompt: Some(format!(
+                                "The workflow file at '{path}' could not be loaded: {e}"
+                            )),
+                            ..default_step()
+                        }],
+                    }
+                }
+            }
+        }
         SessionSource::Prompt { text } => Workflow {
             name: "prompt".into(),
             description: Some("User prompt".into()),

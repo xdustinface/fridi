@@ -396,6 +396,22 @@ body {
     color: var(--text-secondary);
 }
 
+.picker-item-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.picker-item-badge {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    background: var(--surface-3);
+    padding: 1px var(--space-2);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+}
+
 .picker-empty {
     padding: var(--space-6);
     text-align: center;

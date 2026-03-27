@@ -107,11 +107,6 @@ impl Agent for ClaudeAgent {
             cmd.arg(name);
         }
 
-        if let Some(skill) = &config.skill {
-            cmd.arg("--skill");
-            cmd.arg(skill);
-        }
-
         if let Some(args) = &config.args {
             for arg in args.split_whitespace() {
                 cmd.arg(arg);
