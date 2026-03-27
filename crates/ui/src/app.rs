@@ -120,6 +120,15 @@ pub(crate) fn App() -> Element {
         }
     });
 
+    let mut is_fresh_install = use_signal(|| {
+        let sessions_dir = PathBuf::from(SESSIONS_DIR);
+        !sessions_dir.exists()
+            || sessions_dir
+                .read_dir()
+                .map(|mut d| d.next().is_none())
+                .unwrap_or(true)
+    });
+
     let mut showing_creator = use_signal(|| false);
     let mut showing_quick_capture = use_signal(|| false);
     let mut pending_close_tab: Signal<Option<usize>> = use_signal(|| None);
@@ -296,6 +305,7 @@ pub(crate) fn App() -> Element {
                 eprintln!("failed to save session: {e}");
                 return;
             }
+            is_fresh_install.set(false);
 
             let runner_clone = runner.read().clone();
             let session_clone = session.clone();
@@ -484,7 +494,7 @@ pub(crate) fn App() -> Element {
                 on_new_session: on_new_tab,
             }
             div { class: "{main_content_class}",
-                if is_home && tabs.read().is_empty() {
+                if is_home && *is_fresh_install.read() {
                     WelcomeScreen {
                         repos: recent_repos_from_state(&window_state.read()),
                         on_new_session: on_new_tab,
@@ -514,9 +524,12 @@ pub(crate) fn App() -> Element {
                         }
                     }
                 } else {
-                    WelcomeScreen {
-                        repos: recent_repos_from_state(&window_state.read()),
-                        on_new_session: on_new_tab,
+                    HomeDashboard {
+                        key: "{default_repo.clone().unwrap_or_default()}",
+                        repo: default_repo.clone(),
+                        on_pick_issue,
+                        on_show_pr_picker: on_new_tab,
+                        on_show_creator: on_new_tab,
                     }
                 }
             }
