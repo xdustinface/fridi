@@ -55,6 +55,7 @@ pub(crate) fn SessionCreator(
     repo: Option<String>,
     on_create: EventHandler<SessionSource>,
     on_cancel: EventHandler<()>,
+    on_open_palette: Option<EventHandler<()>>,
 ) -> Element {
     let mut mode = use_signal(|| CreatorMode::SelectMode);
     let mut issues = use_signal(|| None::<LoadState<Vec<GitHubIssue>>>);
@@ -162,11 +163,21 @@ pub(crate) fn SessionCreator(
                             button {
                                 class: "mode-btn",
                                 onclick: move |_| {
-                                    mode.set(CreatorMode::NewPrompt);
-                                    prompt_text.set(String::new());
+                                    if let Some(handler) = &on_open_palette {
+                                        handler.call(());
+                                    } else {
+                                        mode.set(CreatorMode::NewPrompt);
+                                        prompt_text.set(String::new());
+                                    }
                                 },
                                 div { class: "mode-btn-title", "New by Prompt" }
-                                div { class: "mode-btn-desc", "Describe the task" }
+                                div { class: "mode-btn-desc",
+                                    if on_open_palette.is_some() {
+                                        "Describe the task (Cmd+P)"
+                                    } else {
+                                        "Describe the task"
+                                    }
+                                }
                             }
                         }
                         if !has_repo {
