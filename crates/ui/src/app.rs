@@ -9,6 +9,7 @@ use serde_yaml::to_string as to_yaml;
 use tracing::error;
 
 use crate::components::backlog_tab::BacklogTab;
+use crate::components::command_palette::CommandPalette;
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::home_dashboard::HomeDashboard;
 use crate::components::quick_capture::QuickCapture;
@@ -112,6 +113,7 @@ pub(crate) fn App() -> Element {
     });
 
     let mut showing_creator = use_signal(|| false);
+    let mut showing_command_palette = use_signal(|| false);
     let mut showing_quick_capture = use_signal(|| false);
     let mut pending_close_tab: Signal<Option<usize>> = use_signal(|| None);
     let mut sidebar_pinned = use_signal(|| false);
@@ -339,6 +341,7 @@ pub(crate) fn App() -> Element {
     };
 
     let on_create_session = create_session.clone();
+    let mut on_palette_create = create_session.clone();
     let on_pick_issue = create_session;
 
     let on_cancel_creator = move |()| {
@@ -371,6 +374,9 @@ pub(crate) fn App() -> Element {
                 if (mod && e.key === 'b') {
                     e.preventDefault();
                     dioxus.send('toggle-quick-capture');
+                } else if (mod && e.key === 'p') {
+                    e.preventDefault();
+                    dioxus.send('toggle-command-palette');
                 } else if (mod && e.key === 't') {
                     e.preventDefault();
                     dioxus.send('new-session');
@@ -395,6 +401,9 @@ pub(crate) fn App() -> Element {
                     "toggle-quick-capture" => {
                         showing_quick_capture.toggle();
                     }
+                    "toggle-command-palette" => {
+                        showing_command_palette.toggle();
+                    }
                     "new-session" => {
                         showing_creator.set(true);
                     }
@@ -411,6 +420,8 @@ pub(crate) fn App() -> Element {
                     "escape" => {
                         if pending_close_tab.read().is_some() {
                             pending_close_tab.set(None);
+                        } else if *showing_command_palette.read() {
+                            showing_command_palette.set(false);
                         } else if *showing_quick_capture.read() {
                             showing_quick_capture.set(false);
                         } else if *showing_creator.read() {
@@ -514,6 +525,19 @@ pub(crate) fn App() -> Element {
                     repo: default_repo.clone(),
                     on_create: on_create_session,
                     on_cancel: on_cancel_creator,
+                    on_open_palette: move |_| {
+                        showing_creator.set(false);
+                        showing_command_palette.set(true);
+                    },
+                }
+            }
+            if *showing_command_palette.read() {
+                CommandPalette {
+                    on_create: move |source| {
+                        showing_command_palette.set(false);
+                        on_palette_create(source);
+                    },
+                    on_dismiss: move |_| showing_command_palette.set(false),
                 }
             }
             if *showing_quick_capture.read() {
