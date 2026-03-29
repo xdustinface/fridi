@@ -82,25 +82,35 @@ body {
     border-bottom: 1px solid var(--border-default);
     min-height: 40px;
     padding: 0 var(--space-1);
-    overflow-x: auto;
     flex-shrink: 0;
+    min-width: 0;
+}
+
+.tab-scroll-area {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    gap: 2px;
 }
 
 .tab {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
+    position: relative;
+    padding: var(--space-2) 24px var(--space-2) var(--space-3);
     cursor: pointer;
     border: 1px solid transparent;
     border-bottom: none;
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-    margin-right: 2px;
     font-size: 13px;
     color: var(--text-secondary);
     transition: background-color var(--transition-normal), color var(--transition-normal);
     white-space: nowrap;
-    max-width: 200px;
+    flex: 1 1 0;
+    min-width: 80px;
+    overflow: hidden;
 }
 
 .tab:hover {
@@ -117,7 +127,8 @@ body {
 .tab-name {
     overflow: hidden;
     text-overflow: ellipsis;
-    flex: 1;
+    flex-shrink: 1;
+    min-width: 30px;
 }
 
 .tab-session-id {
@@ -125,18 +136,33 @@ body {
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 80px;
+    flex-shrink: 10;
+    min-width: 0;
 }
 
 .tab-close {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
     background: none;
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
     font-size: 12px;
-    padding: 0 2px;
     line-height: 1;
     border-radius: 3px;
+    padding: 0 2px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.tab:hover .tab-close {
+    opacity: 1;
+}
+
+.tab.active .tab-close {
+    opacity: 1;
 }
 
 .tab-close:hover {
@@ -151,7 +177,8 @@ body {
     cursor: pointer;
     font-size: 16px;
     padding: var(--space-1) 10px;
-    margin-left: var(--space-1);
+    margin-left: auto;
+    flex-shrink: 0;
     border-radius: var(--radius-sm);
     transition: background-color var(--transition-normal), color var(--transition-normal);
 }
@@ -880,9 +907,14 @@ body {
 .toast-progress-bar.warning { background-color: var(--status-warning); }
 .toast-progress-bar.error   { background-color: var(--status-error); }
 
-/* Home tab */
-.home-tab {
+/* Home tab — fixed width, not flex-sized */
+.tab.home-tab,
+.tab.home-tab.active {
     font-weight: 600;
+    flex: none;
+    width: auto;
+    min-width: auto;
+    max-width: none;
 }
 
 /* Dashboard */
