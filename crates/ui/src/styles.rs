@@ -1915,4 +1915,71 @@ body {
 .main-content.sidebar-pinned {
     margin-left: 280px;
 }
+
+/* Command palette */
+.command-palette-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(12, 14, 18, 0.7);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 20vh;
+    z-index: 250;
+    animation: fade-in 0.12s ease-out;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.command-palette {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    width: 500px;
+    max-width: 90vw;
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    animation: palette-slide-in 0.12s ease-out;
+}
+
+@keyframes palette-slide-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.command-palette-input {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    background-color: transparent;
+    border: none;
+    border-bottom: 2px solid var(--border-default);
+    color: var(--text-primary);
+    font-size: 16px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color var(--transition-normal);
+}
+
+.command-palette-input:focus {
+    border-bottom-color: var(--accent);
+}
+
+.command-palette-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.command-palette-hint {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    text-align: center;
+}
 "#;
