@@ -59,8 +59,9 @@ pub(crate) fn CommandPalette(
 }
 
 fn parse_input(text: &str) -> SessionSource {
+    let text = text.trim();
     if let Some(rest) = text.strip_prefix('#') {
-        if let Ok(number) = rest.parse::<u64>() {
+        if let Ok(number) = rest.trim().parse::<u64>() {
             return SessionSource::Issue {
                 number,
                 title: format!("Issue #{number}"),
@@ -68,15 +69,97 @@ fn parse_input(text: &str) -> SessionSource {
         }
     }
     if let Some(rest) = text.strip_prefix('!') {
-        if let Ok(number) = rest.parse::<u64>() {
+        if let Ok(number) = rest.trim().parse::<u64>() {
             return SessionSource::PR {
                 number,
                 title: format!("PR #{number}"),
-                head_ref: String::new(),
+                head_ref: format!("pr/{number}"),
             };
         }
     }
     SessionSource::Prompt {
         text: text.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_issue_number() {
+        let result = parse_input("#123");
+        assert!(matches!(result, SessionSource::Issue { number: 123, .. }));
+    }
+
+    #[test]
+    fn parse_pr_number() {
+        let result = parse_input("!45");
+        match result {
+            SessionSource::PR {
+                number, head_ref, ..
+            } => {
+                assert_eq!(number, 45);
+                assert_eq!(head_ref, "pr/45");
+            }
+            other => panic!("expected PR, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_plain_text() {
+        let result = parse_input("fix the login bug");
+        match result {
+            SessionSource::Prompt { text } => assert_eq!(text, "fix the login bug"),
+            other => panic!("expected Prompt, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_whitespace_around_prefix() {
+        assert!(matches!(
+            parse_input("  #123  "),
+            SessionSource::Issue { number: 123, .. }
+        ));
+        assert!(matches!(
+            parse_input("  !45  "),
+            SessionSource::PR { number: 45, .. }
+        ));
+    }
+
+    #[test]
+    fn parse_whitespace_after_prefix() {
+        assert!(matches!(
+            parse_input("# 123"),
+            SessionSource::Issue { number: 123, .. }
+        ));
+        assert!(matches!(
+            parse_input("! 45"),
+            SessionSource::PR { number: 45, .. }
+        ));
+    }
+
+    #[test]
+    fn parse_non_numeric_after_prefix_falls_back_to_prompt() {
+        assert!(matches!(parse_input("#abc"), SessionSource::Prompt { .. }));
+        assert!(matches!(parse_input("!xyz"), SessionSource::Prompt { .. }));
+    }
+
+    #[test]
+    fn parse_empty_and_whitespace_only_returns_prompt() {
+        match parse_input("") {
+            SessionSource::Prompt { text } => assert_eq!(text, ""),
+            other => panic!("expected Prompt, got {other:?}"),
+        }
+        match parse_input("   ") {
+            SessionSource::Prompt { text } => assert_eq!(text, ""),
+            other => panic!("expected Prompt, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_prefix_alone_falls_back_to_prompt() {
+        assert!(matches!(parse_input("#"), SessionSource::Prompt { .. }));
+        assert!(matches!(parse_input("!"), SessionSource::Prompt { .. }));
     }
 }
